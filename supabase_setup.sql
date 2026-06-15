@@ -1,5 +1,5 @@
 -- =====================================================================
--- FitCircle — Supabase setup
+-- 运动 Challenge — Supabase setup
 -- Run this in your Supabase project: SQL Editor > New query > paste > Run
 -- =====================================================================
 
@@ -52,4 +52,4 @@ create policy "open read logs"      on public.workout_logs  for select using (tr
 create policy "open write logs"     on public.workout_logs  for all    using (true) with check (true);
 
 -- Done. Copy your Project URL and anon public key from
--- Project Settings > API, then paste them into FitCircle's Settings screen.
+-- Project Settings > API. The app (运动 Challenge) connects automatically.

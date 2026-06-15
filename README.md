@@ -1,4 +1,6 @@
-# FitCircle 💪
+# 运动 Challenge 💪
+
+*Yùn Dòng Challenge — "运动" is Mandarin for "workout / exercise."*
 
 A friendly, mobile-first workout app for the whole family to stay accountable together. Bodyweight + minimal-gear routines that auto-adjust to each person's age group, with set-by-set tracking, rest timers, and gamification (XP, levels, streaks, badges, weekly challenges, and a shared squad leaderboard).
 
