@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>FitCircle — Move together, stay accountable</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#0f1320; --bg2:#161b2e; --card:#1c2238; --card2:#232a45;
+    --line:#2c3454; --text:#f4f6ff; --muted:#9aa6c7;
+    --orange:#ff6b35; --coral:#ff4d6d; --amber:#ffb02e;
+    --teal:#1fd4b4; --green:#34d399; --blue:#4d7cff; --purple:#9b6bff;
+    --grad:linear-gradient(135deg,#ff6b35,#ff4d6d);
+    --grad2:linear-gradient(135deg,#1fd4b4,#4d7cff);
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+    --r:18px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:radial-gradient(1200px 600px at 70% -10%,#23305a 0%,var(--bg) 55%) fixed;
+    color:var(--text); min-height:100vh; padding-bottom:84px;
+  }
+  .wrap{max-width:560px;margin:0 auto;padding:16px}
+  h1,h2,h3{margin:0}
+  button{font-family:inherit;cursor:pointer;border:none;color:inherit}
+  .btn{background:var(--grad);color:#fff;border-radius:14px;padding:14px 18px;font-size:16px;font-weight:700;width:100%;box-shadow:0 6px 18px rgba(255,77,109,.35);transition:transform .08s}
+  .btn:active{transform:scale(.97)}
+  .btn.alt{background:var(--card2);box-shadow:none;border:1px solid var(--line)}
+  .btn.teal{background:var(--grad2);box-shadow:0 6px 18px rgba(31,212,180,.3)}
+  .btn.sm{padding:9px 14px;font-size:14px;width:auto;border-radius:11px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+  .muted{color:var(--muted)}
+  .row{display:flex;align-items:center;gap:12px}
+  .between{justify-content:space-between}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--line);padding:6px 11px;border-radius:999px;font-size:13px;font-weight:600}
+  .grid{display:grid;gap:12px}
+  .hidden{display:none!important}
+  .center{text-align:center}
+  input,select{width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:13px;font-size:16px;outline:none}
+  input:focus,select:focus{border-color:var(--orange)}
+  label{font-size:13px;font-weight:600;color:var(--muted);display:block;margin:0 0 6px 2px}
+  .field{margin-bottom:14px}
+  /* top bar */
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .logo{font-weight:900;font-size:22px;letter-spacing:-.5px;display:flex;align-items:center;gap:8px}
+  .logo .dot{width:14px;height:14px;border-radius:50%;background:var(--grad)}
+  .avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;border:2px solid var(--line)}
+  /* nav */
+  .nav{position:fixed;bottom:0;left:0;right:0;background:rgba(16,19,32,.92);backdrop-filter:blur(12px);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 4px 14px;z-index:50}
+  .nav button{background:none;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:600;flex:1;padding:4px}
+  .nav button .ic{font-size:21px}
+  .nav button.active{color:var(--orange)}
+  /* hero stat */
+  .hero{background:var(--grad);border-radius:22px;padding:20px;color:#fff;box-shadow:0 12px 30px rgba(255,77,109,.35);position:relative;overflow:hidden}
+  .hero::after{content:"";position:absolute;right:-30px;top:-30px;width:140px;height:140px;background:rgba(255,255,255,.12);border-radius:50%}
+  .stat3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
+  .stat3 .v{font-size:24px;font-weight:900}
+  .stat3 .l{font-size:11px;opacity:.9;text-transform:uppercase;letter-spacing:.5px}
+  .chip{font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;background:var(--card2);border:1px solid var(--line)}
+  .wtile{display:flex;align-items:center;gap:14px;padding:14px;border-radius:16px;background:var(--card);border:1px solid var(--line);text-align:left;width:100%}
+  .wtile:active{transform:scale(.99)}
+  .wico{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+  .bar{height:9px;background:var(--bg2);border-radius:99px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--grad2);border-radius:99px;transition:width .4s}
+  /* exercise runner */
+  .exhead{font-size:13px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.6px}
+  .setrow{display:flex;align-items:center;gap:10px;padding:10px;border-radius:13px;background:var(--bg2);border:1px solid var(--line);margin-bottom:8px}
+  .setrow.done{background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.5)}
+  .check{width:30px;height:30px;border-radius:9px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;background:var(--card)}
+  .setrow.done .check{background:var(--green);border-color:var(--green);color:#06281c}
+  .repedit{width:54px;text-align:center;padding:8px;font-weight:800;font-size:16px}
+  /* rest overlay */
+  .rest{position:fixed;inset:0;background:rgba(8,10,20,.96);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+  .ring{font-size:72px;font-weight:900;font-variant-numeric:tabular-nums}
+  .badge{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px;border-radius:16px;background:var(--card);border:1px solid var(--line);text-align:center}
+  .badge.locked{opacity:.38;filter:grayscale(.6)}
+  .badge .e{font-size:34px}
+  .badge .n{font-size:12px;font-weight:700}
+  .lb-row{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;background:var(--card);border:1px solid var(--line);margin-bottom:8px}
+  .rank{width:30px;font-weight:900;font-size:17px;text-align:center}
+  .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--line);padding:12px 18px;border-radius:14px;font-weight:700;box-shadow:var(--shadow);z-index:200;opacity:0;transition:opacity .3s,bottom .3s}
+  .toast.show{opacity:1;bottom:108px}
+  .seg{display:flex;background:var(--bg2);border:1px solid var(--line);border-radius:13px;padding:4px;gap:4px}
+  .seg button{flex:1;padding:9px;border-radius:10px;font-weight:700;font-size:13px;background:none;color:var(--muted)}
+  .seg button.on{background:var(--grad);color:#fff}
+  .agechip{padding:12px 8px;border-radius:13px;border:1px solid var(--line);background:var(--card);text-align:center;font-weight:700;font-size:13px}
+  .agechip.on{border-color:var(--orange);background:rgba(255,107,53,.15)}
+  .agechip .e{font-size:22px;display:block;margin-bottom:3px}
+  .ex-pick{display:flex;align-items:center;gap:10px;padding:11px;border-radius:12px;background:var(--bg2);border:1px solid var(--line);margin-bottom:7px}
+  .ex-pick.on{border-color:var(--teal);background:rgba(31,212,180,.12)}
+  .tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--card2);color:var(--muted)}
+  a.link{color:var(--teal);font-weight:700;text-decoration:none}
+  .fade{animation:fade .35s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<nav class="nav hidden" id="nav">
+  <button data-tab="home"><span class="ic">🏠</span>Home</button>
+  <button data-tab="leaderboard"><span class="ic">🏆</span>Squad</button>
+  <button data-tab="badges"><span class="ic">🎖️</span>Badges</button>
+  <button data-tab="profile"><span class="ic">⚙️</span>Profile</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   FitCircle  —  data, content & logic
+   ============================================================ */
+
+/* ---------- AGE GROUPS ---------- */
+const AGE_GROUPS = {
+  youth:       {label:"Youth",       sub:"Ages 6–12",  emoji:"🧒", sets:2, repMul:0.8, restSet:30, restEx:45, impact:1, note:"Fun & form-first"},
+  teenager:    {label:"Teenager",    sub:"Ages 13–17", emoji:"🧑", sets:3, repMul:1.0, restSet:45, restEx:60, impact:3, note:"Build strength"},
+  young_adult: {label:"Young Adult", sub:"Ages 18–29", emoji:"🧑‍🦱", sets:4, repMul:1.15,restSet:50, restEx:60, impact:3, note:"High intensity"},
+  adult:       {label:"Adult",       sub:"Ages 30–45", emoji:"🧔", sets:3, repMul:1.0, restSet:60, restEx:75, impact:2, note:"Balanced & steady"},
+  parent:      {label:"Parent",      sub:"Busy days",  emoji:"👨‍👧", sets:3, repMul:0.95,restSet:45, restEx:50, impact:2, note:"Time-efficient"},
+  grandparent: {label:"Grandparent", sub:"Ages 60+",   emoji:"🧓", sets:2, repMul:0.7, restSet:75, restEx:90, impact:1, note:"Gentle & mobile"},
+};
+
+/* ---------- EXERCISE LIBRARY (bodyweight + minimal gear) ----------
+   impact: 1 low / 2 medium / 3 high   |   unit: reps | sec (per side handled in name) */
+const EXERCISES = [
+  // PUSH
+  {id:"pushup",   name:"Push-ups",          part:"Push", emoji:"🙇", base:10, unit:"reps", impact:2, tip:"Hands under your shoulders. Lower your chest to the floor, then push back up. Keep your body straight like a board."},
+  {id:"incpush",  name:"Incline Push-ups",  part:"Push", emoji:"📐", base:10, unit:"reps", impact:1, tip:"Put your hands on a couch or step. Lower your chest to it, then push back up."},
+  {id:"wallpush", name:"Wall Push-ups",     part:"Push", emoji:"🧱", base:12, unit:"reps", impact:1, tip:"Stand facing a wall with hands flat on it. Bend your elbows to lean in, then push back out."},
+  {id:"pikepush", name:"Pike Push-ups",     part:"Push", emoji:"🔺", base:8,  unit:"reps", impact:3, tip:"Make an upside-down V with your body. Bend your arms to lower your head toward the floor, then push up."},
+  {id:"dbpress",  name:"Dumbbell Shoulder Press", part:"Push", emoji:"🏋️", base:10, unit:"reps", impact:2, tip:"Hold weights at your shoulders. Push them straight up over your head, then lower slowly."},
+  // PULL
+  {id:"bandrow",  name:"Resistance Band Row", part:"Pull", emoji:"🎗️", base:12, unit:"reps", impact:1, tip:"Hold a band out in front of you. Pull your hands back to your ribs and squeeze your shoulder blades together."},
+  {id:"dbrow",    name:"Dumbbell Bent Row",   part:"Pull", emoji:"🏋️", base:10, unit:"reps", impact:2, tip:"Lean forward a little. Pull the weights up to your sides like you're starting a lawnmower."},
+  {id:"superman", name:"Superman Hold",       part:"Pull", emoji:"🦸", base:20, unit:"sec",  impact:1, tip:"Lie on your tummy. Lift your arms, chest, and legs off the floor and hold like you're flying."},
+  {id:"doorrow",  name:"Doorway Rows",        part:"Pull", emoji:"🚪", base:10, unit:"reps", impact:2, tip:"Hold a doorframe and lean back with straight arms. Pull yourself toward the door, then lean back out."},
+  // LEGS
+  {id:"squat",    name:"Bodyweight Squats",   part:"Legs", emoji:"🦵", base:12, unit:"reps", impact:2, tip:"Stand tall with feet apart. Sit back like there's a chair behind you, then stand back up."},
+  {id:"lunge",    name:"Reverse Lunges",      part:"Legs", emoji:"🚶", base:10, unit:"reps", impact:2, tip:"Step one foot back and bend both knees. Push back up and switch legs each time."},
+  {id:"glute",    name:"Glute Bridges",       part:"Legs", emoji:"🌉", base:12, unit:"reps", impact:1, tip:"Lie on your back with knees bent. Lift your hips up high, squeeze your bottom, then lower."},
+  {id:"calf",     name:"Calf Raises",         part:"Legs", emoji:"🦶", base:15, unit:"reps", impact:1, tip:"Stand tall and rise up onto your tiptoes, then slowly come back down."},
+  {id:"wallsit",  name:"Wall Sit",            part:"Legs", emoji:"🪑", base:25, unit:"sec",  impact:2, tip:"Lean your back on a wall and slide down like you're sitting in a chair. Hold it there!"},
+  {id:"stepup",   name:"Step-ups",            part:"Legs", emoji:"🪜", base:10, unit:"reps", impact:2, tip:"Step one foot up onto a sturdy step, stand up tall, then step back down. Switch legs."},
+  // CORE
+  {id:"plank",    name:"Plank",               part:"Core", emoji:"🧘", base:25, unit:"sec",  impact:1, tip:"Rest on your forearms and toes. Keep your body straight and tight like a board."},
+  {id:"crunch",   name:"Crunches",            part:"Core", emoji:"🔄", base:14, unit:"reps", impact:1, tip:"Lie on your back with knees bent. Curl your shoulders up toward your knees, then lower."},
+  {id:"deadbug",  name:"Dead Bug",            part:"Core", emoji:"🐞", base:10, unit:"reps", impact:1, tip:"Lie on your back with arms up. Lower one arm and the opposite leg, then switch sides."},
+  {id:"bicycle",  name:"Bicycle Crunches",    part:"Core", emoji:"🚲", base:16, unit:"reps", impact:2, tip:"Lie down and touch your opposite elbow to your knee, pedaling your legs like a bike."},
+  {id:"legraise", name:"Leg Raises",          part:"Core", emoji:"🦿", base:10, unit:"reps", impact:2, tip:"Lie on your back with legs straight. Lift them up toward the ceiling, then lower slowly."},
+  {id:"birddog",  name:"Bird Dog",            part:"Core", emoji:"🐕", base:10, unit:"reps", impact:1, tip:"On hands and knees, reach one arm forward and the opposite leg back. Then switch sides."},
+  // CARDIO
+  {id:"jacks",    name:"Jumping Jacks",       part:"Cardio", emoji:"⭐", base:30, unit:"sec", impact:3, tip:"Jump your feet out wide and clap your hands over your head, then jump back in."},
+  {id:"knees",    name:"High Knees",          part:"Cardio", emoji:"🏃", base:25, unit:"sec", impact:3, tip:"Run in place, bringing your knees up high toward your chest."},
+  {id:"climber",  name:"Mountain Climbers",   part:"Cardio", emoji:"⛰️", base:25, unit:"sec", impact:3, tip:"Get in a plank and quickly drive your knees toward your chest, one at a time."},
+  {id:"march",    name:"March in Place",      part:"Cardio", emoji:"🥁", base:35, unit:"sec", impact:1, tip:"March in place, lifting your knees and swinging your arms."},
+  {id:"burpee",   name:"Burpees",             part:"Cardio", emoji:"🔥", base:8,  unit:"reps",impact:3, tip:"Squat down, jump your feet back to a plank, jump them in, then jump up tall."},
+  // MOBILITY
+  {id:"catcow",   name:"Cat–Cow Stretch",     part:"Mobility", emoji:"🐈", base:30, unit:"sec", impact:1, tip:"On hands and knees, arch your back up like a cat, then dip it down. Move slowly."},
+  {id:"armcircle",name:"Arm Circles",         part:"Mobility", emoji:"🔁", base:25, unit:"sec", impact:1, tip:"Stretch your arms out and make big slow circles, forward and then backward."},
+  {id:"hipcircle",name:"Hip Circles",         part:"Mobility", emoji:"➰", base:25, unit:"sec", impact:1, tip:"Hands on your hips, make slow circles like you're spinning a hula hoop."},
+  {id:"hamstr",   name:"Hamstring Stretch",   part:"Mobility", emoji:"🤸", base:30, unit:"sec", impact:1, tip:"Sit or stand and reach gently toward your toes. Feel a light stretch — don't bounce."},
+  {id:"shoulder", name:"Shoulder Rolls",      part:"Mobility", emoji:"💆", base:25, unit:"sec", impact:1, tip:"Roll your shoulders up, back, and down in slow circles."},
+];
+const byId = id => EXERCISES.find(e=>e.id===id);
+
+/* ---------- WORKOUT TEMPLATES (kept under ~60 min after scaling) ---------- */
+const TEMPLATES = [
+  {id:"fullbody", name:"Full Body Burn", emoji:"🔥", color:"var(--orange)",
+   desc:"Hit every major muscle group",
+   warm:["armcircle","march"], main:["squat","pushup","dbrow","glute","plank","jacks"], cool:["hamstr","catcow"]},
+  {id:"upper", name:"Upper Body Power", emoji:"💪", color:"var(--coral)",
+   desc:"Push, pull & shoulders",
+   warm:["armcircle","shoulder"], main:["pushup","dbrow","pikepush","bandrow","superman"], cool:["shoulder","catcow"]},
+  {id:"lower", name:"Legs & Glutes", emoji:"🦵", color:"var(--teal)",
+   desc:"Strong legs, strong base",
+   warm:["hipcircle","march"], main:["squat","lunge","glute","calf","wallsit"], cool:["hamstr","hipcircle"]},
+  {id:"core", name:"Core & Stability", emoji:"🧘", color:"var(--purple)",
+   desc:"Build a rock-solid midsection",
+   warm:["catcow","birddog"], main:["plank","crunch","deadbug","bicycle","legraise"], cool:["catcow","hamstr"]},
+  {id:"cardio", name:"Cardio Kick", emoji:"⚡", color:"var(--amber)",
+   desc:"Get the heart pumping",
+   warm:["march","armcircle"], main:["jacks","knees","climber","squat","burpee"], cool:["hamstr","shoulder"]},
+  {id:"mobility", name:"Mobility & Recovery", emoji:"🌿", color:"var(--green)",
+   desc:"Gentle flow — great any day",
+   warm:["march"], main:["catcow","armcircle","hipcircle","birddog","glute","hamstr"], cool:["shoulder"]},
+];
+
+/* ---------- BADGES ---------- */
+const BADGES = [
+  {id:"first",   e:"🌱", n:"First Step",    test:s=>s.workouts>=1,   d:"Complete 1 workout"},
+  {id:"five",    e:"🖐️", n:"High Five",      test:s=>s.workouts>=5,   d:"Complete 5 workouts"},
+  {id:"ten",     e:"💥", n:"Double Digits",  test:s=>s.workouts>=10,  d:"Complete 10 workouts"},
+  {id:"streak3", e:"🔥", n:"On Fire",        test:s=>s.bestStreak>=3, d:"3-day streak"},
+  {id:"streak7", e:"⚡", n:"Unstoppable",    test:s=>s.bestStreak>=7, d:"7-day streak"},
+  {id:"xp500",   e:"⭐", n:"Rising Star",    test:s=>s.xp>=500,       d:"Earn 500 XP"},
+  {id:"xp1500",  e:"🌟", n:"All-Star",       test:s=>s.xp>=1500,      d:"Earn 1500 XP"},
+  {id:"allround",e:"🎯", n:"Well Rounded",   test:s=>s.types>=4,      d:"Try 4 workout types"},
+  {id:"early",   e:"🌅", n:"Early Bird",     test:s=>s.early,         d:"Finish before 8am"},
+  {id:"perfect", e:"💯", n:"Perfectionist",  test:s=>s.perfect,       d:"Finish every set in a workout"},
+];
+
+/* ---------- LEVELS ---------- */
+const levelFor = xp => Math.floor(Math.sqrt(xp/50))+1;
+const xpForLevel = lvl => 50*(lvl-1)*(lvl-1);
+
+/* ============================================================
+   DATA LAYER  —  Supabase cloud  OR  localStorage fallback
+   ============================================================ */
+const CFG_KEY="fitcircle_cfg", LOCAL_KEY="fitcircle_local", ME_KEY="fitcircle_me";
+// Default cloud project (can be overridden in Settings)
+const DEFAULT_CFG={
+  url:"https://yoxuokmhnnmtqtuncckw.supabase.co",
+  key:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlveHVva21obm5tdHF0dW5jY2t3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0Njc5NjEsImV4cCI6MjA5NzA0Mzk2MX0.oU8R8FTKMVMxKaHlnTxGhhz_sLFiANr955SbvqN8pP4"
+};
+// Always connect to the shared cloud project — no manual setup for users.
+let cfg = DEFAULT_CFG;
+let sb = null;
+function initSB(){
+  if(cfg && cfg.url && cfg.key && window.supabase){
+    try{ sb = window.supabase.createClient(cfg.url, cfg.key); return true; }catch(e){ console.warn(e); }
+  }
+  sb=null; return false;
+}
+const isCloud = ()=>!!sb;
+
+/* local store helpers */
+function lget(){ return JSON.parse(localStorage.getItem(LOCAL_KEY)||'{"profiles":[],"logs":[]}'); }
+function lset(d){ localStorage.setItem(LOCAL_KEY, JSON.stringify(d)); }
+const uid = ()=> 'id-'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+
+const DB = {
+  async getProfiles(){
+    if(isCloud()){
+      const {data,error}=await sb.from('profiles').select('*').order('xp',{ascending:false});
+      if(error) throw error; return data||[];
+    }
+    return lget().profiles.slice().sort((a,b)=>b.xp-a.xp);
+  },
+  async createProfile(p){
+    const rec={name:p.name,age_group:p.age_group,avatar:p.avatar,color:p.color,
+               xp:0,streak:0,best_streak:0,last_workout:null};
+    if(isCloud()){
+      const {data,error}=await sb.from('profiles').insert(rec).select().single();
+      if(error) throw error; return data;
+    }
+    rec.id=uid(); rec.created_at=new Date().toISOString();
+    const d=lget(); d.profiles.push(rec); lset(d); return rec;
+  },
+  async updateProfile(id,fields){
+    if(isCloud()){ const {error}=await sb.from('profiles').update(fields).eq('id',id); if(error) throw error; return; }
+    const d=lget(); const p=d.profiles.find(x=>x.id===id); if(p) Object.assign(p,fields); lset(d);
+  },
+  async deleteProfile(id){
+    if(isCloud()){ await sb.from('workout_logs').delete().eq('profile_id',id); await sb.from('profiles').delete().eq('id',id); return; }
+    const d=lget(); d.profiles=d.profiles.filter(x=>x.id!==id); d.logs=d.logs.filter(l=>l.profile_id!==id); lset(d);
+  },
+  async getLogs(profileId){
+    if(isCloud()){
+      let q=sb.from('workout_logs').select('*').order('created_at',{ascending:false});
+      if(profileId) q=q.eq('profile_id',profileId);
+      const {data,error}=await q; if(error) throw error; return data||[];
+    }
+    let logs=lget().logs.slice().sort((a,b)=>(b.created_at>a.created_at?1:-1));
+    if(profileId) logs=logs.filter(l=>l.profile_id===profileId);
+    return logs;
+  },
+  async addLog(log){
+    if(isCloud()){ const {data,error}=await sb.from('workout_logs').insert(log).select().single(); if(error) throw error; return data; }
+    log.id=uid(); log.created_at=new Date().toISOString();
+    const d=lget(); d.logs.push(log); lset(d); return log;
+  }
+};
+
+/* ============================================================
+   APP STATE + HELPERS
+   ============================================================ */
+let ME=null, PROFILES=[], TAB="home", SESSION=null, WORKOUT_CLOCK=null;
+function fmtClock(ms){ const s=Math.max(0,Math.floor(ms/1000)); const m=Math.floor(s/60); return m+":"+String(s%60).padStart(2,"0"); }
+const app=()=>document.getElementById("app");
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2200); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
+
+/* build a scaled, runnable workout from a template + age group */
+function buildWorkout(tpl, ageKey){
+  const ag=AGE_GROUPS[ageKey];
+  const sect=(ids,role)=> ids
+    .map(byId).filter(Boolean)
+    // skip very high-impact moves for low-impact groups
+    .filter(e=> !(ag.impact===1 && e.impact===3 && role==="main"))
+    .map(e=>{
+      const sets = role==="warm"||role==="cool" ? 1 : ag.sets;
+      let target = Math.max(e.unit==="sec"?10:4, Math.round(e.base*(role==="main"?ag.repMul:0.9)));
+      return {ex:e, sets, target, unit:e.unit, restSet:ag.restSet, role};
+    });
+  const warm=sect(tpl.warm,"warm"), main=sect(tpl.main,"main"), cool=sect(tpl.cool,"cool");
+  return {tpl, ageKey, warm, main, cool, restEx:ag.restEx};
+}
+function estMinutes(w){
+  let sec=0;
+  [...w.warm,...w.main,...w.cool].forEach(it=>{
+    const work=(it.unit==="sec"?it.target:it.target*3); // ~3s per rep
+    sec += it.sets*work + (it.sets-1)*it.restSet + w.restEx;
+  });
+  return Math.max(8, Math.round(sec/60));
+}
+
+/* aggregate stats for a profile from its logs */
+function statsFrom(profile, logs){
+  const mine=logs.filter(l=>l.profile_id===profile.id);
+  const types=new Set(mine.map(l=>l.workout_name)).size;
+  let early=false, perfect=false;
+  mine.forEach(l=>{ if(l.details&&l.details.early) early=true; if(l.done_sets&&l.total_sets&&l.done_sets===l.total_sets) perfect=true; });
+  return {workouts:mine.length, xp:profile.xp, bestStreak:profile.best_streak, streak:profile.streak, types, early, perfect};
+}
+
+/* ============================================================
+   RENDER ROUTER
+   ============================================================ */
+async function boot(){
+  initSB();
+  // restore me
+  const savedMe=localStorage.getItem(ME_KEY);
+  try{ PROFILES=await DB.getProfiles(); }catch(e){ PROFILES=[]; }
+  if(savedMe){ ME=PROFILES.find(p=>p.id===savedMe)||null; }
+  if(ME){ showApp(); } else { renderProfiles(); }
+}
+function showApp(){ $("#nav").classList.remove("hidden"); go(TAB); bindNav(); }
+function bindNav(){
+  document.querySelectorAll(".nav button").forEach(b=>{
+    b.onclick=()=>go(b.dataset.tab);
+  });
+}
+function setActive(){ document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===TAB)); }
+async function go(tab){
+  TAB=tab; setActive();
+  if(tab==="home") return renderHome();
+  if(tab==="leaderboard") return renderLeaderboard();
+  if(tab==="badges") return renderBadges();
+  if(tab==="profile") return renderProfile();
+}
+
+/* ---------- PROFILE PICKER / ONBOARDING ---------- */
+function renderProfiles(){
+  $("#nav").classList.add("hidden");
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>FitCircle</div>
+      <span class="pill">☁️ Synced</span></div>
+    <div class="hero" style="margin-bottom:18px">
+      <h1 style="font-size:26px;margin-bottom:6px">Move together. 💛</h1>
+      <p style="margin:0;opacity:.95">Pick your profile to log today's workout and keep the squad accountable.</p>
+    </div>
+    <h3 style="margin:6px 2px 10px">Who's working out?</h3>
+    <div class="grid" id="plist"></div>
+    <button class="btn teal" style="margin-top:14px" id="addP">＋ New profile</button>
+    <p class="muted center" style="font-size:12px;margin-top:14px">☁️ Everyone's profiles &amp; progress sync automatically across devices.</p>
+   </div>`;
+  const list=$("#plist");
+  if(!PROFILES.length){ list.innerHTML=`<div class="card center muted">No profiles yet — add the first one!</div>`; }
+  PROFILES.forEach(p=>{
+    const ag=AGE_GROUPS[p.age_group]||AGE_GROUPS.adult;
+    const b=document.createElement("button"); b.className="wtile";
+    b.innerHTML=`<div class="wico" style="background:${p.color}22;color:${p.color}">${p.avatar}</div>
+      <div style="flex:1"><div style="font-weight:800;font-size:17px">${esc(p.name)}</div>
+      <div class="muted" style="font-size:13px">${ag.label} · Lv ${levelFor(p.xp)} · ${p.xp} XP</div></div>
+      <span class="chip">🔥 ${p.streak}</span>`;
+    b.onclick=()=>{ ME=p; localStorage.setItem(ME_KEY,p.id); showApp(); };
+    list.appendChild(b);
+  });
+  $("#addP").onclick=renderNewProfile;
+}
+
+function renderNewProfile(){
+  let sel={avatar:"💪",color:"var(--orange)",age:"adult"};
+  const avatars=["💪","🔥","⚡","🌟","🦁","🐯","🦅","🌸","🍀","🚀","🧗","🏃","🤸","🧘"];
+  const colors=["#ff6b35","#ff4d6d","#1fd4b4","#4d7cff","#9b6bff","#34d399","#ffb02e"];
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>New profile</div></div>
+    <div class="card">
+      <div class="field"><label>Your name</label><input id="np_name" placeholder="e.g. Mei" maxlength="20"/></div>
+      <div class="field"><label>Pick an avatar</label><div class="row" style="flex-wrap:wrap;gap:8px" id="np_av"></div></div>
+      <div class="field"><label>Accent color</label><div class="row" style="flex-wrap:wrap;gap:10px" id="np_col"></div></div>
+      <div class="field"><label>Age group — sets your intensity & rest</label>
+        <div class="grid" style="grid-template-columns:repeat(3,1fr)" id="np_age"></div></div>
+      <button class="btn" id="np_save">Create profile</button>
+      <button class="btn alt" style="margin-top:10px" id="np_back">Cancel</button>
+    </div>
+   </div>`;
+  const av=$("#np_av"); avatars.forEach(a=>{const s=document.createElement("button");s.className="avatar";s.textContent=a;
+    s.onclick=()=>{sel.avatar=a;[...av.children].forEach(c=>c.style.borderColor="var(--line)");s.style.borderColor=sel.color;};av.appendChild(s);});
+  av.firstChild.style.borderColor=sel.color;
+  const col=$("#np_col"); colors.forEach(c=>{const s=document.createElement("button");s.style.cssText=`width:34px;height:34px;border-radius:50%;background:${c};border:3px solid transparent`;
+    s.onclick=()=>{sel.color=c;[...col.children].forEach(x=>x.style.borderColor="transparent");s.style.borderColor="#fff";};col.appendChild(s);});
+  col.firstChild.style.borderColor="#fff";
+  const age=$("#np_age");
+  Object.entries(AGE_GROUPS).forEach(([k,g])=>{const s=document.createElement("button");s.className="agechip"+(k==="adult"?" on":"");
+    s.innerHTML=`<span class="e">${g.emoji}</span>${g.label}<div class="muted" style="font-weight:500;font-size:10px">${g.sub}</div>`;
+    s.onclick=()=>{sel.age=k;[...age.children].forEach(c=>c.classList.remove("on"));s.classList.add("on");};age.appendChild(s);});
+  $("#np_back").onclick=renderProfiles;
+  $("#np_save").onclick=async()=>{
+    const name=$("#np_name").value.trim(); if(!name){toast("Add a name first");return;}
+    $("#np_save").textContent="Saving…"; $("#np_save").disabled=true;
+    try{
+      const p=await DB.createProfile({name,age_group:sel.age,avatar:sel.avatar,color:sel.color});
+      PROFILES=await DB.getProfiles(); ME=PROFILES.find(x=>x.id===p.id)||p;
+      localStorage.setItem(ME_KEY,ME.id); toast("Welcome, "+name+"! 🎉"); showApp();
+    }catch(e){ alert("Could not save: "+e.message); $("#np_save").textContent="Create profile"; $("#np_save").disabled=false; }
+  };
+}
+
+/* ---------- HOME / DASHBOARD ---------- */
+async function renderHome(){
+  const ag=AGE_GROUPS[ME.age_group]||AGE_GROUPS.adult;
+  const logs=await DB.getLogs();
+  await refreshStreak(logs);
+  const mine=logs.filter(l=>l.profile_id===ME.id);
+  const lvl=levelFor(ME.xp), nextXP=xpForLevel(lvl+1), curBase=xpForLevel(lvl);
+  const prog=Math.min(100,Math.round((ME.xp-curBase)/(nextXP-curBase)*100));
+  const ch=weeklyChallenge(mine);
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar">
+      <div class="logo"><span class="dot"></span>FitCircle</div>
+      <button class="avatar" style="background:${ME.color}22;color:${ME.color}" id="meav">${ME.avatar}</button>
+    </div>
+    <div class="hero" style="margin-bottom:16px">
+      <div class="row between" style="margin-bottom:14px">
+        <div><div style="font-size:13px;opacity:.9">Hi ${esc(ME.name)} 👋</div>
+          <h1 style="font-size:22px">Level ${lvl} · ${ag.label}</h1></div>
+        <span class="chip" style="background:rgba(255,255,255,.18);border:none">🔥 ${ME.streak} day${ME.streak===1?"":"s"}</span>
+      </div>
+      <div class="stat3">
+        <div><div class="v">${ME.xp}</div><div class="l">Total XP</div></div>
+        <div><div class="v">${mine.length}</div><div class="l">Workouts</div></div>
+        <div><div class="v">${ME.best_streak}</div><div class="l">Best streak</div></div>
+      </div>
+      <div style="margin-top:14px">
+        <div class="row between" style="font-size:12px;opacity:.92;margin-bottom:5px"><span>Lv ${lvl}</span><span>${ME.xp}/${nextXP} XP</span></div>
+        <div class="bar" style="background:rgba(255,255,255,.25)"><i style="width:${prog}%;background:#fff"></i></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;border-color:${ch.done?'rgba(52,211,153,.5)':'var(--line)'}">
+      <div class="row between"><div class="exhead">🎯 Weekly challenge</div>${ch.done?'<span class="chip" style="color:var(--green)">Done ✓</span>':''}</div>
+      <div style="font-weight:700;margin:6px 0 8px">${ch.label}</div>
+      <div class="bar"><i style="width:${Math.min(100,ch.pct)}%"></i></div>
+      <div class="muted" style="font-size:12px;margin-top:6px">${ch.cur}/${ch.goal} · +${ch.reward} XP bonus</div>
+    </div>
+
+    <div class="row between" style="margin:4px 2px 10px"><h3>Today's workout</h3><span class="muted" style="font-size:12px">≤ 60 min · tap to start</span></div>
+    <div class="grid" id="tpls"></div>
+    <button class="btn alt" style="margin-top:14px" id="customBtn">🛠️ Build a custom workout</button>
+
+    ${mine.length?`<h3 style="margin:22px 2px 10px">Recent activity</h3><div class="grid" id="recent"></div>`:''}
+   </div>`;
+  const tpls=$("#tpls");
+  TEMPLATES.forEach(t=>{
+    const w=buildWorkout(t,ME.age_group); const mins=estMinutes(w);
+    const b=document.createElement("button"); b.className="wtile";
+    b.innerHTML=`<div class="wico" style="background:${t.color}22;color:${t.color}">${t.emoji}</div>
+      <div style="flex:1"><div style="font-weight:800;font-size:16px">${t.name}</div>
+      <div class="muted" style="font-size:13px">${t.desc}</div></div>
+      <span class="pill">⏱️ ${mins}m</span>`;
+    b.onclick=()=>startWorkout(w);
+    tpls.appendChild(b);
+  });
+  $("#customBtn").onclick=renderCustomBuilder;
+  $("#meav").onclick=()=>go("profile");
+  if(mine.length){
+    const r=$("#recent");
+    mine.slice(0,4).forEach(l=>{
+      const d=document.createElement("div"); d.className="card"; d.style.padding="12px";
+      d.innerHTML=`<div class="row between"><div style="font-weight:700">${esc(l.workout_name)}</div><span class="chip">+${l.xp_earned} XP</span></div>
+        <div class="muted" style="font-size:12px;margin-top:4px">${l.date} · ${l.done_sets}/${l.total_sets} sets · ${l.duration_min} min</div>`;
+      r.appendChild(d);
+    });
+  }
+}
+
+/* recompute streak based on logs + last_workout */
+async function refreshStreak(logs){
+  const mine=logs.filter(l=>l.profile_id===ME.id);
+  if(!mine.length){ return; }
+  if(ME.last_workout){
+    const gap=daysBetween(ME.last_workout,todayStr());
+    if(gap>1 && ME.streak!==0){ ME.streak=0; await DB.updateProfile(ME.id,{streak:0}); }
+  }
+}
+
+/* ---------- CUSTOM WORKOUT BUILDER ---------- */
+function renderCustomBuilder(){
+  const chosen=new Set();
+  const parts=[...new Set(EXERCISES.map(e=>e.part))];
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>Custom workout</div>
+      <button class="btn sm alt" id="cb_back">Back</button></div>
+    <p class="muted" style="margin:0 0 14px">Pick the exercises you want. Sets, reps & rest auto-scale to your age group (${(AGE_GROUPS[ME.age_group]||{}).label}).</p>
+    <div id="cb_parts"></div>
+    <div style="height:80px"></div>
+   </div>
+   <div style="position:fixed;bottom:84px;left:0;right:0;padding:12px;background:linear-gradient(transparent,var(--bg) 30%)">
+     <div class="wrap" style="padding:0 16px"><button class="btn" id="cb_start">Start workout (<span id="cb_n">0</span>)</button></div>
+   </div>`;
+  const wrap=$("#cb_parts");
+  parts.forEach(part=>{
+    const h=document.createElement("div"); h.className="exhead"; h.style.margin="14px 2px 8px"; h.textContent=part; wrap.appendChild(h);
+    EXERCISES.filter(e=>e.part===part).forEach(e=>{
+      const row=document.createElement("button"); row.className="ex-pick";
+      row.innerHTML=`<span style="font-size:20px">${e.emoji}</span><div style="flex:1;text-align:left">
+        <div style="font-weight:700;font-size:14px">${e.name}</div>
+        <span class="tag">${e.base} ${e.unit} base</span></div><span class="check"></span>`;
+      row.onclick=()=>{ if(chosen.has(e.id)){chosen.delete(e.id);row.classList.remove("on");row.querySelector(".check").textContent="";}
+        else{chosen.add(e.id);row.classList.add("on");row.querySelector(".check").textContent="✓";}
+        $("#cb_n").textContent=chosen.size; };
+      wrap.appendChild(row);
+    });
+  });
+  $("#cb_back").onclick=()=>go("home");
+  $("#cb_start").onclick=()=>{
+    if(!chosen.size){toast("Pick at least one exercise");return;}
+    const tpl={id:"custom",name:"My Custom Workout",emoji:"🛠️",color:"var(--blue)",desc:"Custom",
+      warm:["march"],main:[...chosen],cool:["hamstr"]};
+    startWorkout(buildWorkout(tpl,ME.age_group));
+  };
+}
+
+/* ============================================================
+   WORKOUT RUNNER  (sets, check-off, edit reps, rest timers)
+   ============================================================ */
+function startWorkout(w){
+  const items=[...w.warm,...w.main,...w.cool].map(it=>({...it,
+    done:Array(it.sets).fill(false), reps:Array(it.sets).fill(it.target)}));
+  SESSION={w, items, idx:0, startTs:Date.now()};
+  renderRunner();
+}
+function totalSets(){ return SESSION.items.reduce((a,it)=>a+it.sets,0); }
+function doneSets(){ return SESSION.items.reduce((a,it)=>a+it.done.filter(Boolean).length,0); }
+
+function startClock(){
+  clearInterval(WORKOUT_CLOCK);
+  WORKOUT_CLOCK=setInterval(()=>{ const el=$("#rn_clock"); if(el && SESSION) el.textContent="⏱️ "+fmtClock(Date.now()-SESSION.startTs); },1000);
+}
+function stopClock(){ clearInterval(WORKOUT_CLOCK); WORKOUT_CLOCK=null; }
+
+function renderRunner(){
+  $("#nav").classList.add("hidden");
+  const s=SESSION, it=s.items[s.idx], e=it.ex;
+  const roleLabel={warm:"Warm-up",main:"Workout",cool:"Cool-down"}[it.role];
+  const tot=totalSets(), done=doneSets(), pct=Math.round(done/tot*100);
+  const isTimed=it.unit==="sec";
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar">
+      <button class="btn sm alt" id="rn_quit">✕ Quit</button>
+      <span class="pill" id="rn_clock">⏱️ ${fmtClock(Date.now()-s.startTs)}</span>
+      <span class="pill">${s.idx+1} / ${s.items.length}</span>
+    </div>
+    <div class="muted center" style="font-size:11px;margin:-6px 0 10px">${s.w.tpl.name} · total time</div>
+    <div class="bar" style="margin-bottom:16px"><i style="width:${pct}%"></i></div>
+
+    <div class="card" style="text-align:center;margin-bottom:14px">
+      <div class="exhead">${roleLabel}</div>
+      <div style="font-size:60px;margin:8px 0">${e.emoji}</div>
+      <h2 style="font-size:22px">${e.name}</h2>
+      <div class="muted" style="margin-top:6px">${it.sets} set${it.sets>1?"s":""} ·
+        ${it.target} ${isTimed?"sec hold":"reps"} target · ${it.restSet}s rest</div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;background:var(--card2);border-color:var(--line)">
+      <div class="exhead" style="color:var(--teal)">📖 How to do it</div>
+      <div style="margin-top:6px;line-height:1.5">${esc(e.tip||"")}</div>
+    </div>
+
+    <div class="exhead" style="margin:0 2px 10px">Sets — ${isTimed?"tap ▶ to start the timer, or check off":"check off or edit if you fell short"}</div>
+    <div id="rn_sets"></div>
+
+    <button class="btn" style="margin-top:8px" id="rn_next">${s.idx<s.items.length-1?"Next exercise →":"Finish workout 🎉"}</button>
+   </div>`;
+  const sw=$("#rn_sets");
+  for(let i=0;i<it.sets;i++){
+    const row=document.createElement("div"); row.className="setrow"+(it.done[i]?" done":"");
+    const startBtn = isTimed && !it.done[i]
+      ? `<button class="btn sm teal rn_start" style="padding:8px 12px">▶ ${it.target}s</button>` : "";
+    row.innerHTML=`<button class="check">${it.done[i]?"✓":""}</button>
+      <div style="flex:1"><span style="font-weight:700">Set ${i+1}</span></div>
+      ${startBtn}
+      <input class="repedit" type="number" min="0" value="${it.reps[i]}" />
+      <span class="muted" style="font-size:13px;width:34px">${isTimed?"sec":"reps"}</span>`;
+    const check=row.querySelector(".check"), inp=row.querySelector(".repedit");
+    inp.onchange=()=>{ it.reps[i]=Math.max(0,parseInt(inp.value)||0); };
+    const markDone=()=>{ it.done[i]=true; if(i<it.sets-1) startRest(it.restSet,"Rest before set "+(i+2),()=>renderRunner()); else renderRunner(); };
+    check.onclick=()=>{
+      it.done[i]=!it.done[i]; row.classList.toggle("done",it.done[i]); check.textContent=it.done[i]?"✓":"";
+      if(it.done[i] && i<it.sets-1){ startRest(it.restSet,"Rest before set "+(i+2)); }
+    };
+    const sb=row.querySelector(".rn_start");
+    if(sb) sb.onclick=()=>startTimer(it.target, e, "Set "+(i+1)+" of "+it.sets, (secsDone)=>{ it.reps[i]=secsDone; markDone(); });
+    sw.appendChild(row);
+  }
+  startClock();
+  $("#rn_quit").onclick=()=>{ if(confirm("Quit this workout? Progress won't be saved.")){ stopClock(); SESSION=null; showApp(); } };
+  $("#rn_next").onclick=()=>{
+    if(s.idx<s.items.length-1){
+      s.idx++; const restMsg="Up next: "+s.items[s.idx].ex.name;
+      startRest(s.w.restEx, restMsg, renderRunner);
+    } else { stopClock(); finishWorkout(); }
+  };
+}
+
+/* full-screen countdown timer for a time-based set */
+function startTimer(sec, ex, label, onDone){
+  let left=sec, paused=false; const total=sec;
+  const ov=document.createElement("div"); ov.className="rest";
+  ov.innerHTML=`<div style="font-size:40px;margin-bottom:4px">${ex.emoji}</div>
+    <div class="exhead" style="color:var(--orange)">${esc(ex.name)}</div>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">${esc(label||"")}</div>
+    <div class="ring" id="t_n" style="color:var(--orange)">${left}</div>
+    <div class="muted" style="margin:6px 24px 20px;max-width:340px;line-height:1.5">${esc(ex.tip||"")}</div>
+    <div class="row" style="gap:10px">
+      <button class="btn sm alt" id="t_pause">⏸ Pause</button>
+      <button class="btn sm alt" id="t_plus">+10s</button>
+    </div>
+    <button class="btn teal" style="max-width:240px;margin-top:18px" id="t_done">Done ✓</button>
+    <button class="btn alt" style="max-width:240px;margin-top:10px" id="t_cancel">Cancel</button>`;
+  document.body.appendChild(ov);
+  const tick=setInterval(()=>{ if(paused) return; left--; $("#t_n").textContent=Math.max(0,left); if(left<=0) finish(false); },1000);
+  function close(){ clearInterval(tick); ov.remove(); }
+  function finish(cancelled){ close(); if(!cancelled && onDone) onDone(cancelled?0:Math.max(1,total-Math.max(0,left))); }
+  $("#t_pause",ov).onclick=()=>{ paused=!paused; $("#t_pause").textContent=paused?"▶ Resume":"⏸ Pause"; };
+  $("#t_plus",ov).onclick=()=>{ left+=10; $("#t_n").textContent=left; };
+  $("#t_done",ov).onclick=()=>finish(false);
+  $("#t_cancel",ov).onclick=()=>finish(true);
+}
+
+/* rest overlay with skip + ±15s */
+function startRest(sec, msg, after){
+  let left=sec; const ov=document.createElement("div"); ov.className="rest";
+  ov.innerHTML=`<div class="exhead" style="color:var(--teal)">Rest</div>
+    <div class="ring" id="rest_n">${left}</div>
+    <div class="muted" style="margin:6px 0 22px">${esc(msg||"")}</div>
+    <div class="row" style="gap:10px">
+      <button class="btn sm alt" id="rest_minus">−15s</button>
+      <button class="btn sm alt" id="rest_plus">+15s</button>
+    </div>
+    <button class="btn teal" style="max-width:240px;margin-top:18px" id="rest_skip">Skip rest →</button>`;
+  document.body.appendChild(ov);
+  const tick=setInterval(()=>{ left--; $("#rest_n").textContent=Math.max(0,left); if(left<=0) finish(); },1000);
+  function finish(){ clearInterval(tick); ov.remove(); if(after) after(); }
+  ov.querySelector("#rest_skip").onclick=finish;
+  ov.querySelector("#rest_minus").onclick=()=>{ left=Math.max(1,left-15); $("#rest_n").textContent=left; };
+  ov.querySelector("#rest_plus").onclick=()=>{ left+=15; $("#rest_n").textContent=left; };
+}
+
+async function finishWorkout(){
+  const s=SESSION, tot=totalSets(), done=doneSets();
+  const mins=Math.max(1,Math.round((Date.now()-s.startTs)/60000));
+  // XP: 10 per completed set + completion bonus, weekly bonus handled separately
+  let xp=done*10 + 30;
+  const perfect = done===tot;
+  if(perfect) xp+=40;
+  const early = new Date().getHours()<8;
+  const details={early, perfect, parts:[...new Set(s.items.map(i=>i.ex.part))]};
+  // streak
+  let streak=ME.streak||0, best=ME.best_streak||0;
+  if(ME.last_workout!==todayStr()){
+    const gap=ME.last_workout?daysBetween(ME.last_workout,todayStr()):999;
+    streak = gap===1 ? streak+1 : 1;
+  } else { streak=Math.max(1,streak); }
+  best=Math.max(best,streak);
+  const newXP=(ME.xp||0)+xp;
+
+  const log={profile_id:ME.id, workout_name:s.w.tpl.name, date:todayStr(),
+    duration_min:mins, xp_earned:xp, total_sets:tot, done_sets:done, details};
+  try{
+    await DB.addLog(log);
+    await DB.updateProfile(ME.id,{xp:newXP,streak,best_streak:best,last_workout:todayStr()});
+  }catch(e){ alert("Save failed: "+e.message); }
+  ME.xp=newXP; ME.streak=streak; ME.best_streak=best; ME.last_workout=todayStr();
+  PROFILES=await DB.getProfiles().catch(()=>PROFILES);
+  ME=PROFILES.find(p=>p.id===ME.id)||ME;
+  SESSION=null;
+  renderSummary({xp,mins,done,tot,perfect,streak});
+}
+
+function renderSummary(r){
+  $("#nav").classList.remove("hidden");
+  const lvl=levelFor(ME.xp);
+  app().innerHTML=`
+   <div class="fade center">
+    <div class="hero" style="margin:30px 0 20px;text-align:center">
+      <div style="font-size:64px">${r.perfect?"💯":"🎉"}</div>
+      <h1 style="font-size:26px;margin:6px 0">Workout complete!</h1>
+      <p style="opacity:.95;margin:0">${r.perfect?"Perfect — every single set done!":"Great work showing up today."}</p>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="stat3">
+        <div><div class="v" style="color:var(--orange)">+${r.xp}</div><div class="l muted">XP earned</div></div>
+        <div><div class="v" style="color:var(--teal)">${r.done}/${r.tot}</div><div class="l muted">Sets done</div></div>
+        <div><div class="v" style="color:var(--amber)">🔥${r.streak}</div><div class="l muted">Streak</div></div>
+      </div>
+      <div class="muted" style="margin-top:12px;font-size:13px">${r.mins} min · Level ${lvl}</div>
+    </div>
+    <button class="btn" id="sm_home">Back to home</button>
+    <button class="btn teal" style="margin-top:10px" id="sm_lb">See the squad 🏆</button>
+   </div>`;
+  $("#sm_home").onclick=()=>go("home");
+  $("#sm_lb").onclick=()=>go("leaderboard");
+  checkNewBadges();
+}
+
+/* ---------- WEEKLY CHALLENGE ---------- */
+function startOfWeek(){ const d=new Date(); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); return d.toISOString().slice(0,10); }
+function weeklyChallenge(mine){
+  const sow=startOfWeek();
+  const wk=mine.filter(l=>l.date>=sow);
+  const goal=4, cur=wk.length;
+  return {label:"Complete 4 workouts this week", goal, cur, pct:Math.round(cur/goal*100), done:cur>=goal, reward:150};
+}
+
+/* ---------- LEADERBOARD ---------- */
+async function renderLeaderboard(){
+  PROFILES=await DB.getProfiles().catch(()=>PROFILES);
+  const logs=await DB.getLogs().catch(()=>[]);
+  const sow=startOfWeek();
+  const view= app();
+  const ranked=PROFILES.slice().sort((a,b)=>b.xp-a.xp);
+  view.innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>The Squad</div>
+      <span class="pill">${isCloud()?"☁️ Live":"📱 Local"}</span></div>
+    <div class="seg" style="margin-bottom:16px" id="lb_seg">
+      <button class="on" data-m="xp">All-time XP</button>
+      <button data-m="streak">Streaks 🔥</button>
+      <button data-m="week">This week</button>
+    </div>
+    <div id="lb_list"></div>
+    <p class="muted center" style="font-size:12px;margin-top:14px">Cheer each other on — accountability is the secret sauce. 💪</p>
+   </div>`;
+  function draw(mode){
+    let arr=PROFILES.slice();
+    if(mode==="xp") arr.sort((a,b)=>b.xp-a.xp);
+    if(mode==="streak") arr.sort((a,b)=>b.streak-a.streak||b.best_streak-a.best_streak);
+    if(mode==="week"){
+      arr.forEach(p=>p._wk=logs.filter(l=>l.profile_id===p.id&&l.date>=sow).length);
+      arr.sort((a,b)=>b._wk-a._wk);
+    }
+    const list=$("#lb_list"); list.innerHTML="";
+    const medals=["🥇","🥈","🥉"];
+    arr.forEach((p,i)=>{
+      const ag=AGE_GROUPS[p.age_group]||AGE_GROUPS.adult;
+      const metric = mode==="xp"?`${p.xp} XP`: mode==="streak"?`🔥 ${p.streak} day${p.streak===1?"":"s"}`:`${p._wk} this week`;
+      const isMe=p.id===ME.id;
+      const row=document.createElement("div"); row.className="lb-row"; if(isMe) row.style.borderColor=ME.color;
+      row.innerHTML=`<div class="rank">${medals[i]||(i+1)}</div>
+        <div class="wico" style="width:40px;height:40px;background:${p.color}22;color:${p.color};font-size:20px">${p.avatar}</div>
+        <div style="flex:1"><div style="font-weight:800">${esc(p.name)}${isMe?' <span class="tag" style="background:'+ME.color+'33;color:'+ME.color+'">you</span>':''}</div>
+        <div class="muted" style="font-size:12px">${ag.label} · Lv ${levelFor(p.xp)}</div></div>
+        <span class="chip">${metric}</span>`;
+      list.appendChild(row);
+    });
+    if(!arr.length) list.innerHTML=`<div class="card center muted">No squad members yet.</div>`;
+  }
+  draw("xp");
+  $("#lb_seg").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    $("#lb_seg").querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); draw(b.dataset.m);
+  });
+}
+
+/* ---------- BADGES ---------- */
+async function renderBadges(){
+  const logs=await DB.getLogs().catch(()=>[]);
+  const s=statsFrom(ME,logs);
+  const earned=BADGES.filter(b=>b.test(s)).length;
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>Badges</div>
+      <span class="pill">${earned}/${BADGES.length}</span></div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="row between"><div style="font-weight:800;font-size:17px">${esc(ME.name)}'s achievements</div></div>
+      <div class="bar" style="margin-top:10px"><i style="width:${Math.round(earned/BADGES.length*100)}%"></i></div>
+      <div class="muted" style="font-size:12px;margin-top:6px">${earned} unlocked · keep going to collect them all</div>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(3,1fr)" id="bg"></div>
+   </div>`;
+  const g=$("#bg");
+  BADGES.forEach(b=>{
+    const has=b.test(s);
+    const d=document.createElement("div"); d.className="badge"+(has?"":" locked");
+    d.innerHTML=`<div class="e">${has?b.e:"🔒"}</div><div class="n">${b.n}</div><div class="muted" style="font-size:10px">${b.d}</div>`;
+    g.appendChild(d);
+  });
+}
+let _knownBadges=null;
+async function checkNewBadges(){
+  const logs=await DB.getLogs().catch(()=>[]);
+  const s=statsFrom(ME,logs);
+  const now=BADGES.filter(b=>b.test(s)).map(b=>b.id);
+  if(_knownBadges){ const fresh=now.filter(id=>!_knownBadges.includes(id));
+    if(fresh.length){ const b=BADGES.find(x=>x.id===fresh[0]); toast(`${b.e} Badge unlocked: ${b.n}!`); } }
+  _knownBadges=now;
+}
+
+/* ---------- PROFILE / SETTINGS ---------- */
+async function renderProfile(){
+  const ag=AGE_GROUPS[ME.age_group]||AGE_GROUPS.adult;
+  const logs=await DB.getLogs(ME.id).catch(()=>[]);
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>Profile</div>
+      <span class="pill">☁️ Synced</span></div>
+    <div class="card center" style="margin-bottom:16px">
+      <div class="avatar" style="width:74px;height:74px;font-size:38px;margin:0 auto 10px;background:${ME.color}22;color:${ME.color}">${ME.avatar}</div>
+      <h2>${esc(ME.name)}</h2>
+      <div class="muted">Level ${levelFor(ME.xp)} · ${ME.xp} XP · 🔥 ${ME.streak}</div>
+      <div class="field" style="margin-top:16px;text-align:left"><label>Age group (changes intensity & rest)</label>
+        <select id="pf_age"></select></div>
+      <div class="muted" style="font-size:12px;text-align:left">${ag.emoji} ${ag.note} — ${ag.sets} sets · ${ag.restSet}s set rest · ${ag.restEx}s between exercises</div>
+    </div>
+    <button class="btn alt" id="pf_switch" style="margin-bottom:10px">🔄 Switch profile</button>
+    <button class="btn alt" id="pf_del" style="margin-bottom:10px;color:var(--coral)">🗑️ Delete this profile</button>
+    <p class="muted center" style="font-size:12px;margin-top:8px">${logs.length} workouts logged · best streak ${ME.best_streak} · ☁️ auto-synced</p>
+   </div>`;
+  const sel=$("#pf_age");
+  Object.entries(AGE_GROUPS).forEach(([k,g])=>{const o=document.createElement("option");o.value=k;o.textContent=`${g.emoji} ${g.label} (${g.sub})`;if(k===ME.age_group)o.selected=true;sel.appendChild(o);});
+  sel.onchange=async()=>{ ME.age_group=sel.value; await DB.updateProfile(ME.id,{age_group:sel.value}); toast("Intensity updated"); go("profile"); };
+  $("#pf_switch").onclick=()=>{ localStorage.removeItem(ME_KEY); ME=null; $("#nav").classList.add("hidden"); renderProfiles(); };
+  $("#pf_del").onclick=async()=>{ if(confirm("Delete "+ME.name+"'s profile and all their logs?")){ await DB.deleteProfile(ME.id); localStorage.removeItem(ME_KEY); ME=null; PROFILES=await DB.getProfiles().catch(()=>[]); $("#nav").classList.add("hidden"); renderProfiles(); } };
+}
+
+/* GO */
+boot();
+</script>
+</body>
+</html>
