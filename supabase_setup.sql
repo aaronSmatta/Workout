@@ -25,6 +25,10 @@ alter table public.profiles add column if not exists rest_ex  integer;
 -- Saved custom workouts + home-page layout (order / hidden):
 alter table public.profiles add column if not exists custom_workouts jsonb;
 alter table public.profiles add column if not exists home_prefs      jsonb;
+-- Avatar coins economy + owned items + equipped avatar config:
+alter table public.profiles add column if not exists coins      integer not null default 0;
+alter table public.profiles add column if not exists owned      jsonb;
+alter table public.profiles add column if not exists avatar_cfg jsonb;
 
 -- ---------- WORKOUT LOGS --------------------------------------------
 create table if not exists public.workout_logs (
