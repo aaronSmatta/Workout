@@ -297,6 +297,39 @@ function effectiveRest(p){
   return {set:setR, ex:exR};
 }
 
+/* ---- Saved custom workouts + home-page layout (order + hidden).
+   Cloud-synced via optional jsonb columns, mirrored to localStorage. ---- */
+function cwKey(id){ return "fitcircle_cw_"+id; }
+function hpKey(id){ return "fitcircle_home_"+id; }
+function getCustoms(p){
+  if(p && Array.isArray(p.custom_workouts)) return p.custom_workouts;
+  try{ return JSON.parse(localStorage.getItem(cwKey(p.id))||"[]"); }catch(e){ return []; }
+}
+async function saveCustoms(p, arr){
+  localStorage.setItem(cwKey(p.id), JSON.stringify(arr)); p.custom_workouts=arr;
+  try{ await DB.updateProfile(p.id,{custom_workouts:arr}); }catch(e){}
+}
+function getHomePrefs(p){
+  let v=null;
+  if(p && p.home_prefs && typeof p.home_prefs==="object") v=p.home_prefs;
+  else { try{ v=JSON.parse(localStorage.getItem(hpKey(p.id))||"null"); }catch(e){} }
+  return (v && Array.isArray(v.order)) ? {order:v.order, hidden:v.hidden||[]} : {order:[], hidden:[]};
+}
+async function saveHomePrefs(p, prefs){
+  localStorage.setItem(hpKey(p.id), JSON.stringify(prefs)); p.home_prefs=prefs;
+  try{ await DB.updateProfile(p.id,{home_prefs:prefs}); }catch(e){}
+}
+/* ordered list of every workout (templates + customs) for this profile */
+function allWorkouts(p){
+  const customs=getCustoms(p), all=[...TEMPLATES, ...customs], prefs=getHomePrefs(p);
+  const byKey={}; all.forEach(t=>byKey[t.id]=t);
+  const ordered=[];
+  prefs.order.forEach(k=>{ if(byKey[k]){ ordered.push(byKey[k]); delete byKey[k]; } });
+  all.forEach(t=>{ if(byKey[t.id]){ ordered.push(t); delete byKey[t.id]; } }); // new ones appended
+  return ordered;
+}
+const isCustomKey=k=>typeof k==="string" && k.indexOf("cw-")===0;
+
 /* ---- Progression: most-recent achieved reps/seconds per exercise ---- */
 function computePRs(logs){
   const map={};
@@ -525,24 +558,31 @@ async function renderHome(){
       <div class="muted" style="font-size:12px;margin-top:6px">${ch.cur}/${ch.goal} · +${ch.reward} XP bonus</div>
     </div>
 
-    <div class="row between" style="margin:4px 2px 10px"><h3>Today's workout</h3><span class="muted" style="font-size:12px">≤ 60 min · tap to start</span></div>
+    <div class="row between" style="margin:4px 2px 10px"><h3>Today's workout</h3>
+      <button class="btn sm alt" id="editHome" style="padding:6px 12px">✏️ Edit</button></div>
     <div class="grid" id="tpls"></div>
     <button class="btn alt" style="margin-top:14px" id="customBtn">🛠️ Build a custom workout</button>
 
     ${mine.length?`<h3 style="margin:22px 2px 10px">Recent activity</h3><div class="grid" id="recent"></div>`:''}
    </div>`;
   const tpls=$("#tpls");
-  TEMPLATES.forEach(t=>{
+  const prefs=getHomePrefs(ME), hidden=new Set(prefs.hidden);
+  const visible=allWorkouts(ME).filter(t=>!hidden.has(t.id));
+  if(!visible.length){
+    tpls.innerHTML=`<div class="card center muted">No workouts on your home page. Tap ✏️ Edit to show some, or build a custom one below.</div>`;
+  }
+  visible.forEach(t=>{
     const w=buildWorkout(t,ME.age_group); const mins=estMinutes(w);
     const b=document.createElement("button"); b.className="wtile";
     b.innerHTML=`<div class="wico" style="background:${t.color}22;color:${t.color}">${t.emoji}</div>
-      <div style="flex:1"><div style="font-weight:800;font-size:16px">${t.name}</div>
-      <div class="muted" style="font-size:13px">${t.desc}</div></div>
+      <div style="flex:1"><div style="font-weight:800;font-size:16px">${esc(t.name)}${isCustomKey(t.id)?' <span class="tag">custom</span>':''}</div>
+      <div class="muted" style="font-size:13px">${esc(t.desc||"")}</div></div>
       <span class="pill">⏱️ ${mins}m</span>`;
     b.onclick=()=>startWorkout(w);
     tpls.appendChild(b);
   });
   $("#customBtn").onclick=renderCustomBuilder;
+  $("#editHome").onclick=renderOrganize;
   $("#meav").onclick=()=>go("profile");
   if(mine.length){
     const r=$("#recent");
@@ -582,17 +622,29 @@ async function renderCustomBuilder(){
   await loadPRs();   // so custom workouts also progress from your last results
   const chosen=new Set();
   const parts=[...new Set(EXERCISES.map(e=>e.part))];
+  const colors=["#4d7cff","#ff6b35","#1fd4b4","#9b6bff","#34d399","#ffb02e","#ff4d6d"];
+  let pickColor=colors[0];
   app().innerHTML=`
    <div class="fade">
     <div class="topbar"><div class="logo"><span class="dot"></span>Custom workout</div>
       <button class="btn sm alt" id="cb_back">Back</button></div>
-    <p class="muted" style="margin:0 0 14px">Pick the exercises you want. Sets, reps & rest auto-scale to your age group (${(AGE_GROUPS[ME.age_group]||{}).label}).</p>
+    <p class="muted" style="margin:0 0 12px">Pick the exercises you want. Sets, reps & rest auto-scale to your age group (${(AGE_GROUPS[ME.age_group]||{}).label}).</p>
+    <div class="card" style="margin-bottom:14px">
+      <div class="field" style="margin-bottom:10px"><label>Workout name</label><input id="cb_name" placeholder="e.g. Morning Mix" maxlength="28"/></div>
+      <label>Tile color</label><div class="row" style="flex-wrap:wrap;gap:10px" id="cb_col"></div>
+    </div>
     <div id="cb_parts"></div>
-    <div style="height:80px"></div>
+    <div style="height:128px"></div>
    </div>
    <div style="position:fixed;bottom:84px;left:0;right:0;padding:12px;background:linear-gradient(transparent,var(--bg) 30%)">
-     <div class="wrap" style="padding:0 16px"><button class="btn" id="cb_start">Start workout (<span id="cb_n">0</span>)</button></div>
+     <div class="wrap" style="padding:0 16px">
+       <button class="btn" id="cb_save">💾 Save to home (<span id="cb_n">0</span>)</button>
+       <button class="btn alt" id="cb_start" style="margin-top:8px">Save &amp; start now</button>
+     </div>
    </div>`;
+  const col=$("#cb_col");
+  colors.forEach((c,i)=>{const s=document.createElement("button");s.style.cssText=`width:32px;height:32px;border-radius:50%;background:${c};border:3px solid ${i===0?'#fff':'transparent'}`;
+    s.onclick=()=>{pickColor=c;[...col.children].forEach(x=>x.style.borderColor="transparent");s.style.borderColor="#fff";};col.appendChild(s);});
   const wrap=$("#cb_parts");
   parts.forEach(part=>{
     const h=document.createElement("div"); h.className="exhead"; h.style.margin="14px 2px 8px"; h.textContent=part; wrap.appendChild(h);
@@ -608,12 +660,61 @@ async function renderCustomBuilder(){
     });
   });
   $("#cb_back").onclick=()=>go("home");
-  $("#cb_start").onclick=()=>{
-    if(!chosen.size){toast("Pick at least one exercise");return;}
-    const tpl={id:"custom",name:"My Custom Workout",emoji:"🛠️",color:"var(--blue)",desc:"Custom",
-      warm:["march"],main:[...chosen],cool:["hamstr"]};
-    startWorkout(buildWorkout(tpl,ME.age_group));
-  };
+  function buildTpl(){
+    if(!chosen.size){ toast("Pick at least one exercise"); return null; }
+    const name=($("#cb_name").value.trim())||"My Custom Workout";
+    return {id:"cw-"+Date.now().toString(36), name, emoji:"🛠️", color:pickColor,
+      desc:chosen.size+" exercises · custom", warm:["march"], main:[...chosen], cool:["hamstr"]};
+  }
+  async function persist(tpl){
+    const arr=getCustoms(ME); arr.push(tpl); await saveCustoms(ME,arr);
+    const prefs=getHomePrefs(ME); prefs.order.push(tpl.id); await saveHomePrefs(ME,prefs); // appears on home
+  }
+  $("#cb_save").onclick=async()=>{ const tpl=buildTpl(); if(!tpl) return; await persist(tpl); toast("Saved to home 🎉"); go("home"); };
+  $("#cb_start").onclick=async()=>{ const tpl=buildTpl(); if(!tpl) return; await persist(tpl); startWorkout(buildWorkout(tpl,ME.age_group)); };
+}
+
+/* ---------- ORGANIZE HOME PAGE (reorder / hide / delete) ---------- */
+async function renderOrganize(){
+  let order=allWorkouts(ME).map(t=>t.id);
+  const prefs=getHomePrefs(ME); let hidden=new Set(prefs.hidden);
+  const meta=k=> TEMPLATES.find(t=>t.id===k) || getCustoms(ME).find(c=>c.id===k);
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>Organize home</div>
+      <button class="btn sm alt" id="og_done">Done</button></div>
+    <p class="muted" style="margin:0 0 14px">Reorder with ▲▼, tap 👁 to hide a workout from your home page, or 🗑 to delete a custom one.</p>
+    <div id="og_list"></div>
+   </div>`;
+  async function persist(){ await saveHomePrefs(ME,{order, hidden:[...hidden]}); }
+  function draw(){
+    const list=$("#og_list"); list.innerHTML="";
+    order.forEach((k,i)=>{
+      const t=meta(k); if(!t) return;
+      const isHidden=hidden.has(k), custom=isCustomKey(k);
+      const row=document.createElement("div"); row.className="card"; row.style.cssText="padding:10px;margin-bottom:8px;opacity:"+(isHidden?".5":"1");
+      row.innerHTML=`<div class="row" style="gap:8px">
+          <div class="wico" style="width:38px;height:38px;font-size:18px;background:${t.color}22;color:${t.color}">${t.emoji}</div>
+          <div style="flex:1"><div style="font-weight:700;font-size:15px">${esc(t.name)}${custom?' <span class="tag">custom</span>':''}</div>
+            <div class="muted" style="font-size:11px">${isHidden?"Hidden":"On home page"}</div></div>
+          <button class="og-up btn sm alt" style="padding:6px 9px" ${i===0?"disabled":""}>▲</button>
+          <button class="og-dn btn sm alt" style="padding:6px 9px" ${i===order.length-1?"disabled":""}>▼</button>
+          <button class="og-eye btn sm alt" style="padding:6px 9px">${isHidden?"🙈":"👁"}</button>
+          ${custom?'<button class="og-del btn sm alt" style="padding:6px 9px;color:var(--coral)">🗑</button>':""}
+        </div>`;
+      row.querySelector(".og-up").onclick=async()=>{ if(i>0){ [order[i-1],order[i]]=[order[i],order[i-1]]; await persist(); draw(); } };
+      row.querySelector(".og-dn").onclick=async()=>{ if(i<order.length-1){ [order[i+1],order[i]]=[order[i],order[i+1]]; await persist(); draw(); } };
+      row.querySelector(".og-eye").onclick=async()=>{ if(hidden.has(k)) hidden.delete(k); else hidden.add(k); await persist(); draw(); };
+      const del=row.querySelector(".og-del");
+      if(del) del.onclick=async()=>{ if(!confirm("Delete the custom workout “"+t.name+"”?")) return;
+        const arr=getCustoms(ME).filter(c=>c.id!==k); await saveCustoms(ME,arr);
+        order=order.filter(x=>x!==k); hidden.delete(k); await persist(); draw(); };
+      list.appendChild(row);
+    });
+    if(!order.length) list.innerHTML=`<div class="card center muted">No workouts yet.</div>`;
+  }
+  draw();
+  $("#og_done").onclick=()=>go("home");
 }
 
 /* ============================================================
