@@ -137,6 +137,8 @@ const EXERCISES = [
   {id:"dbrow",    name:"Dumbbell Bent Row",   part:"Pull", emoji:"🏋️", base:10, unit:"reps", impact:2, tip:"Lean forward a little. Pull the weights up to your sides like you're starting a lawnmower."},
   {id:"superman", name:"Superman Hold",       part:"Pull", emoji:"🦸", base:20, unit:"sec",  impact:1, tip:"Lie on your tummy. Lift your arms, chest, and legs off the floor and hold like you're flying."},
   {id:"doorrow",  name:"Doorway Rows",        part:"Pull", emoji:"🚪", base:10, unit:"reps", impact:2, tip:"Hold a doorframe and lean back with straight arms. Pull yourself toward the door, then lean back out."},
+  {id:"pullup",   name:"Pull-ups",            part:"Pull", emoji:"🧗", base:6,  unit:"reps", impact:3, tip:"Hang from a bar with palms facing away. Pull your chin above the bar, then lower yourself slowly."},
+  {id:"chinup",   name:"Chin-ups",            part:"Pull", emoji:"💪", base:6,  unit:"reps", impact:3, tip:"Hang from a bar with palms facing you. Pull your chin above the bar, then lower with control."},
   // LEGS
   {id:"squat",    name:"Bodyweight Squats",   part:"Legs", emoji:"🦵", base:12, unit:"reps", impact:2, tip:"Stand tall with feet apart. Sit back like there's a chair behind you, then stand back up."},
   {id:"lunge",    name:"Reverse Lunges",      part:"Legs", emoji:"🚶", base:10, unit:"reps", impact:2, tip:"Step one foot back and bend both knees. Push back up and switch legs each time."},
@@ -151,6 +153,8 @@ const EXERCISES = [
   {id:"bicycle",  name:"Bicycle Crunches",    part:"Core", emoji:"🚲", base:16, unit:"reps", impact:2, tip:"Lie down and touch your opposite elbow to your knee, pedaling your legs like a bike."},
   {id:"legraise", name:"Leg Raises",          part:"Core", emoji:"🦿", base:10, unit:"reps", impact:2, tip:"Lie on your back with legs straight. Lift them up toward the ceiling, then lower slowly."},
   {id:"birddog",  name:"Bird Dog",            part:"Core", emoji:"🐕", base:10, unit:"reps", impact:1, tip:"On hands and knees, reach one arm forward and the opposite leg back. Then switch sides."},
+  {id:"abroller", name:"Ab Roller",           part:"Core", emoji:"🎡", base:8,  unit:"reps", impact:3, tip:"Kneel and hold the roller. Roll forward as far as you can with a tight tummy, then pull yourself back."},
+  {id:"russian",  name:"Russian Twists",      part:"Core", emoji:"🔃", base:16, unit:"reps", impact:2, tip:"Sit leaning back a little, feet up. Twist side to side, tapping the floor by each hip."},
   // CARDIO
   {id:"jacks",    name:"Jumping Jacks",       part:"Cardio", emoji:"⭐", base:30, unit:"sec", impact:3, tip:"Jump your feet out wide and clap your hands over your head, then jump back in."},
   {id:"knees",    name:"High Knees",          part:"Cardio", emoji:"🏃", base:25, unit:"sec", impact:3, tip:"Run in place, bringing your knees up high toward your chest."},
@@ -293,6 +297,10 @@ const DB = {
   async deleteCustomExercise(id){
     if(isCloud()){ const {error}=await sb.from('custom_exercises').delete().eq('id',id); if(error) throw error; return; }
     const a=JSON.parse(localStorage.getItem('fitcircle_cex')||'[]').filter(e=>e.id!==id); localStorage.setItem('fitcircle_cex',JSON.stringify(a));
+  },
+  async updateCustomExercise(id, fields){
+    if(isCloud()){ const {error}=await sb.from('custom_exercises').update(fields).eq('id',id); if(error) throw error; return; }
+    const a=JSON.parse(localStorage.getItem('fitcircle_cex')||'[]'); const e=a.find(x=>x.id===id); if(e) Object.assign(e,fields); localStorage.setItem('fitcircle_cex',JSON.stringify(a));
   },
   /* ---- shared community workout plans ---- */
   async getSharedWorkouts(){
@@ -688,12 +696,15 @@ async function renderCustomBuilder(preselect){
       row.innerHTML=`<span style="font-size:20px">${e.emoji||"💪"}</span><div style="flex:1;text-align:left">
         <div style="font-weight:700;font-size:14px">${esc(e.name)}${mine?' <span class="tag" style="color:var(--teal)">community</span>':''}</div>
         <span class="tag">${e.base} ${e.unit} base</span></div>
-        ${mine?'<button class="cb_delex" title="Delete this community exercise" style="background:none;color:var(--muted);font-size:14px;padding:4px">🗑</button>':''}
+        ${mine?'<button class="cb_editex" title="Edit this exercise" style="background:none;color:var(--muted);font-size:14px;padding:4px">✏️</button>':''}
+        ${mine?'<button class="cb_delex" title="Delete this exercise" style="background:none;color:var(--muted);font-size:14px;padding:4px">🗑</button>':''}
         <span class="check">${chosen.has(e.id)?"✓":""}</span>`;
       const pick=()=>{ if(chosen.has(e.id)){chosen.delete(e.id);row.classList.remove("on");row.querySelector(".check").textContent="";}
         else{chosen.add(e.id);row.classList.add("on");row.querySelector(".check").textContent="✓";}
         $("#cb_n").textContent=chosen.size; };
       row.onclick=pick;
+      const edx=row.querySelector(".cb_editex");
+      if(edx) edx.onclick=(ev)=>{ ev.stopPropagation(); renderNewExercise([...chosen], e); };
       const dx=row.querySelector(".cb_delex");
       if(dx) dx.onclick=async(ev)=>{ ev.stopPropagation();
         if(!confirm("Delete the community exercise “"+e.name+"” for everyone?")) return;
@@ -718,42 +729,46 @@ async function renderCustomBuilder(preselect){
   $("#cb_start").onclick=async()=>{ const tpl=buildTpl(); if(!tpl) return; await persist(tpl); startWorkout(buildWorkout(tpl,ME.age_group)); };
 }
 
-/* ---------- CREATE A NEW (SHARED) EXERCISE ---------- */
-function renderNewExercise(preselect){
-  let unit="reps", part="Push", emoji="💪";
-  const emojis=["💪","🔥","⚡","🏋️","🦵","🧘","🤸","🏃","🚴","🤾","🧗","🙆","🦿","🌀"];
+/* ---------- CREATE OR EDIT A (SHARED) EXERCISE ---------- */
+function renderNewExercise(preselect, editEx){
+  const editing=!!editEx;
+  let unit=editing?editEx.unit:"reps", part=editing?editEx.part:"Push", emoji=editing?(editEx.emoji||"💪"):"💪";
+  const emojis=["💪","🔥","⚡","🏋️","🦵","🧘","🤸","🏃","🚴","🤾","🧗","🙆","🦿","🌀","🎡","🔃"];
+  if(editing && emojis.indexOf(emoji)<0) emojis.unshift(emoji);
   app().innerHTML=`
    <div class="fade">
-    <div class="topbar"><div class="logo"><span class="dot"></span>New exercise</div>
+    <div class="topbar"><div class="logo"><span class="dot"></span>${editing?"Edit exercise":"New exercise"}</div>
       <button class="btn sm alt" id="nx_back">Back</button></div>
-    <p class="muted" style="margin:0 0 12px">Create an exercise once — it's shared with everyone in your squad and can be added to any workout. 🌐</p>
+    <p class="muted" style="margin:0 0 12px">${editing?"Editing updates this exercise for everyone in your squad. 🌐":"Create an exercise once — it's shared with everyone in your squad and can be added to any workout. 🌐"}</p>
     <div class="card">
-      <div class="field"><label>Exercise name</label><input id="nx_name" placeholder="e.g. Cossack Squat" maxlength="36"/></div>
+      <div class="field"><label>Exercise name</label><input id="nx_name" placeholder="e.g. Cossack Squat" maxlength="36" value="${editing?esc(editEx.name):""}"/></div>
       <div class="field"><label>Body part</label><select id="nx_part"></select></div>
       <div class="field"><label>Measured in</label>
-        <div class="seg" id="nx_unit"><button class="on" data-u="reps">Reps</button><button data-u="sec">Seconds (hold)</button></div></div>
-      <div class="field"><label>Default amount (<span id="nx_ul">reps</span> per set)</label><input id="nx_base" type="number" min="1" max="300" value="10"/></div>
+        <div class="seg" id="nx_unit"><button data-u="reps" class="${unit==='reps'?'on':''}">Reps</button><button data-u="sec" class="${unit==='sec'?'on':''}">Seconds (hold)</button></div></div>
+      <div class="field"><label>Default amount (<span id="nx_ul">${unit==='sec'?'seconds':'reps'}</span> per set)</label><input id="nx_base" type="number" min="1" max="300" value="${editing?editEx.base:10}"/></div>
       <div class="field"><label>Pick an icon</label><div class="row" style="flex-wrap:wrap;gap:8px" id="nx_emoji"></div></div>
       <div class="field"><label>How to do it (simple instructions)</label>
-        <input id="nx_tip" placeholder="e.g. Step wide, sink to one side, keep the other leg straight." maxlength="160"/></div>
-      <button class="btn teal" id="nx_save">Create &amp; share exercise</button>
+        <input id="nx_tip" placeholder="e.g. Step wide, sink to one side, keep the other leg straight." maxlength="160" value="${editing?esc(editEx.tip||""):""}"/></div>
+      <button class="btn teal" id="nx_save">${editing?"Save changes":"Create &amp; share exercise"}</button>
       <button class="btn alt" id="nx_cancel" style="margin-top:10px">Cancel</button>
     </div>
    </div>`;
-  const ps=$("#nx_part"); EX_PARTS.forEach(p=>{const o=document.createElement("option");o.value=p;o.textContent=p;if(p==="Push")o.selected=true;ps.appendChild(o);}); ps.onchange=()=>part=ps.value;
+  const ps=$("#nx_part"); EX_PARTS.forEach(p=>{const o=document.createElement("option");o.value=p;o.textContent=p;if(p===part)o.selected=true;ps.appendChild(o);}); ps.onchange=()=>part=ps.value;
   $("#nx_unit").querySelectorAll("button").forEach(b=>b.onclick=()=>{ unit=b.dataset.u; $("#nx_unit").querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); $("#nx_ul").textContent=unit==="sec"?"seconds":"reps"; });
-  const eg=$("#nx_emoji"); emojis.forEach((e,i)=>{const s=document.createElement("button");s.className="avatar";s.style.cssText="width:38px;height:38px;font-size:19px";s.textContent=e;if(i===0)s.style.borderColor="var(--teal)";
+  const eg=$("#nx_emoji"); emojis.forEach(e=>{const s=document.createElement("button");s.className="avatar";s.style.cssText="width:38px;height:38px;font-size:19px";s.textContent=e;if(e===emoji)s.style.borderColor="var(--teal)";
     s.onclick=()=>{emoji=e;[...eg.children].forEach(x=>x.style.borderColor="var(--line)");s.style.borderColor="var(--teal)";};eg.appendChild(s);});
   const goBack=()=>renderCustomBuilder(preselect);
   $("#nx_back").onclick=goBack; $("#nx_cancel").onclick=goBack;
   $("#nx_save").onclick=async()=>{
     const name=$("#nx_name").value.trim(); const base=Math.max(1,Math.min(300,parseInt($("#nx_base").value)||10));
     if(!name){ toast("Give your exercise a name"); return; }
-    const ex={id:"ux-"+Date.now().toString(36), name, part, emoji, base, unit, impact:2,
-      tip:$("#nx_tip").value.trim(), created_by:ME.name};
+    const fields={name, part, emoji, base, unit, tip:$("#nx_tip").value.trim()};
     const btn=$("#nx_save"); btn.textContent="Saving…"; btn.disabled=true;
-    try{ await DB.addCustomExercise(ex); await loadCustomEx(); toast("Exercise shared! 🎉"); renderCustomBuilder([...(preselect||[]), ex.id]); }
-    catch(e){ alert("Could not save: "+e.message); btn.textContent="Create & share exercise"; btn.disabled=false; }
+    try{
+      if(editing){ await DB.updateCustomExercise(editEx.id, fields); await loadCustomEx(); toast("Exercise updated ✓"); renderCustomBuilder(preselect); }
+      else{ const ex=Object.assign({id:"ux-"+Date.now().toString(36), impact:2, created_by:ME.name}, fields);
+        await DB.addCustomExercise(ex); await loadCustomEx(); toast("Exercise shared! 🎉"); renderCustomBuilder([...(preselect||[]), ex.id]); }
+    }catch(e){ alert("Could not save: "+e.message); btn.textContent=editing?"Save changes":"Create & share exercise"; btn.disabled=false; }
   };
 }
 
