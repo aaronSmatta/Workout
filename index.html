@@ -365,6 +365,85 @@ function allWorkouts(p){
 }
 const isCustomKey=k=>typeof k==="string" && k.indexOf("cw-")===0;
 
+/* ============================================================
+   AVATAR STUDIO  —  coins, owned items, shop catalog
+   ============================================================ */
+// slot: base | hat | glasses | pet | bg.  level = min level to buy.
+const SHOP=[
+  // bases (characters)
+  {id:"b_flex", slot:"base", name:"Flex", val:"💪", cost:0,  level:1},
+  {id:"b_face", slot:"base", name:"Classic", val:"🧑", cost:0, level:1},
+  {id:"b_lion", slot:"base", name:"Lion", val:"🦁", cost:60,  level:2},
+  {id:"b_tiger",slot:"base", name:"Tiger", val:"🐯", cost:90,  level:3},
+  {id:"b_panda",slot:"base", name:"Panda", val:"🐼", cost:140, level:4},
+  {id:"b_fox",  slot:"base", name:"Fox", val:"🦊", cost:180,  level:5},
+  {id:"b_robot",slot:"base", name:"Robot", val:"🤖", cost:280, level:7},
+  {id:"b_dragon",slot:"base",name:"Dragon", val:"🐲", cost:450,level:9},
+  // hats
+  {id:"h_none", slot:"hat", name:"No hat", val:"", cost:0, level:1},
+  {id:"h_cap",  slot:"hat", name:"Cap", val:"🧢", cost:40, level:2},
+  {id:"h_grad", slot:"hat", name:"Grad cap", val:"🎓", cost:80, level:3},
+  {id:"h_helm", slot:"hat", name:"Helmet", val:"⛑️", cost:110, level:4},
+  {id:"h_tophat",slot:"hat",name:"Top hat", val:"🎩", cost:160, level:5},
+  {id:"h_crown",slot:"hat", name:"Crown", val:"👑", cost:400, level:9},
+  // glasses
+  {id:"g_none", slot:"glasses", name:"None", val:"", cost:0, level:1},
+  {id:"g_specs",slot:"glasses", name:"Glasses", val:"👓", cost:50, level:2},
+  {id:"g_shades",slot:"glasses",name:"Shades", val:"🕶️", cost:80, level:3},
+  {id:"g_goggles",slot:"glasses",name:"Goggles", val:"🥽", cost:120, level:5},
+  // pets
+  {id:"p_none", slot:"pet", name:"No pet", val:"", cost:0, level:1},
+  {id:"p_dog",  slot:"pet", name:"Puppy", val:"🐶", cost:120, level:3},
+  {id:"p_cat",  slot:"pet", name:"Kitten", val:"🐱", cost:120, level:3},
+  {id:"p_parrot",slot:"pet",name:"Parrot", val:"🦜", cost:220, level:6},
+  {id:"p_dragon",slot:"pet",name:"Baby dragon", val:"🐉", cost:500, level:10},
+  // backgrounds (val = color)
+  {id:"bg_orange",slot:"bg", name:"Sunset", val:"#ff6b35", cost:0, level:1},
+  {id:"bg_teal", slot:"bg", name:"Mint", val:"#1fd4b4", cost:30, level:2},
+  {id:"bg_blue", slot:"bg", name:"Ocean", val:"#4d7cff", cost:40, level:2},
+  {id:"bg_purple",slot:"bg",name:"Grape", val:"#9b6bff", cost:70, level:3},
+  {id:"bg_pink", slot:"bg", name:"Berry", val:"#ff4d6d", cost:70, level:3},
+  {id:"bg_gold", slot:"bg", name:"Gold", val:"#ffb02e", cost:200, level:7},
+];
+const SLOTS=[{k:"base",label:"Character"},{k:"hat",label:"Hat"},{k:"glasses",label:"Glasses"},{k:"pet",label:"Pet"},{k:"bg",label:"Background"}];
+const shopItem=id=>SHOP.find(s=>s.id===id);
+
+function avKey(id){ return "fitcircle_av_"+id; }   // {coins, owned:[], cfg:{}}
+function avStore(p){
+  let v=null;
+  if(p && (p.coins!=null || p.owned || p.avatar_cfg)){
+    v={coins:p.coins||0, owned:Array.isArray(p.owned)?p.owned:[], cfg:(p.avatar_cfg&&typeof p.avatar_cfg==="object")?p.avatar_cfg:{}};
+  } else { try{ v=JSON.parse(localStorage.getItem(avKey(p.id))||"null"); }catch(e){} }
+  return v||{coins:0, owned:[], cfg:{}};
+}
+function getCoins(p){ return avStore(p).coins||0; }
+function getOwned(p){ return avStore(p).owned||[]; }
+function isOwned(p,item){ return item.cost===0 || getOwned(p).indexOf(item.id)>=0; }
+function getAvatar(p){
+  const cfg=avStore(p).cfg||{};
+  return {base:cfg.base||p.avatar||"💪", hat:cfg.hat||"", glasses:cfg.glasses||"", pet:cfg.pet||"", bg:cfg.bg||p.color||"#ff6b35"};
+}
+async function avSave(p, next){   // next: partial {coins, owned, cfg}
+  const cur=avStore(p);
+  const merged={coins: next.coins!=null?next.coins:cur.coins, owned: next.owned||cur.owned, cfg: next.cfg||cur.cfg};
+  localStorage.setItem(avKey(p.id), JSON.stringify(merged));
+  p.coins=merged.coins; p.owned=merged.owned; p.avatar_cfg=merged.cfg;
+  try{ await DB.updateProfile(p.id,{coins:merged.coins, owned:merged.owned, avatar_cfg:merged.cfg}); }catch(e){}
+}
+async function addCoins(p, amt){ await avSave(p,{coins:getCoins(p)+amt}); }
+
+/* layered avatar HTML for any size */
+function avatarHTML(p, size){
+  size=size||44; const a=getAvatar(p);
+  const fs=Math.round(size*0.52), hs=Math.round(size*0.4), gs=Math.round(size*0.34), ps=Math.round(size*0.4);
+  return `<div style="position:relative;width:${size}px;height:${size}px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${a.bg}22;border:2px solid ${a.bg};flex-shrink:0">
+    <span style="font-size:${fs}px;line-height:1">${a.base}</span>
+    ${a.hat?`<span style="position:absolute;top:${-Math.round(size*0.16)}px;font-size:${hs}px">${a.hat}</span>`:""}
+    ${a.glasses?`<span style="position:absolute;top:${Math.round(size*0.28)}px;font-size:${gs}px">${a.glasses}</span>`:""}
+    ${a.pet?`<span style="position:absolute;right:${-Math.round(size*0.12)}px;bottom:${-Math.round(size*0.08)}px;font-size:${ps}px">${a.pet}</span>`:""}
+  </div>`;
+}
+
 /* ---- Progression: most-recent achieved reps/seconds per exercise ---- */
 function computePRs(logs){
   const map={};
@@ -388,12 +467,17 @@ function streaksFromDates(dates){
 }
 /* delete one workout log and roll back its effect on XP / streak */
 async function deleteLogAndRecompute(logId){
+  const before=await DB.getLogs(ME.id).catch(()=>[]);
+  const gone=before.find(l=>l.id===logId);
+  const coinsBack=(gone&&gone.details&&gone.details.coins)||0;
   await DB.deleteLog(logId);
-  const logs=await DB.getLogs(ME.id).catch(()=>[]);
+  const logs=before.filter(l=>l.id!==logId);
   const xp=logs.reduce((a,l)=>a+(l.xp_earned||0),0);
   const dates=[...new Set(logs.map(l=>l.date))].sort();
   const st=streaksFromDates(dates);
+  const coins=Math.max(0, getCoins(ME)-coinsBack);
   try{ await DB.updateProfile(ME.id,{xp, streak:st.streak, best_streak:st.best, last_workout:st.last}); }catch(e){}
+  await avSave(ME,{coins});
   ME.xp=xp; ME.streak=st.streak; ME.best_streak=st.best; ME.last_workout=st.last;
   PROFILES=await DB.getProfiles().catch(()=>PROFILES); ME=PROFILES.find(p=>p.id===ME.id)||ME;
 }
@@ -506,7 +590,7 @@ function renderProfiles(){
   PROFILES.forEach(p=>{
     const ag=AGE_GROUPS[p.age_group]||AGE_GROUPS.adult;
     const b=document.createElement("button"); b.className="wtile";
-    b.innerHTML=`<div class="wico" style="background:${p.color}22;color:${p.color}">${p.avatar}</div>
+    b.innerHTML=`${avatarHTML(p,46)}
       <div style="flex:1"><div style="font-weight:800;font-size:17px">${esc(p.name)}</div>
       <div class="muted" style="font-size:13px">${ag.label} · Lv ${levelFor(p.xp)} · ${p.xp} XP</div></div>
       <span class="chip">🔥 ${p.streak}</span>`;
@@ -569,13 +653,16 @@ async function renderHome(){
    <div class="fade">
     <div class="topbar">
       <div class="logo"><span class="dot"></span>运动 Challenge</div>
-      <button class="avatar" style="background:${ME.color}22;color:${ME.color}" id="meav">${ME.avatar}</button>
+      <button id="meav" style="background:none;border:none;padding:0">${avatarHTML(ME,42)}</button>
     </div>
     <div class="hero" style="margin-bottom:16px">
       <div class="row between" style="margin-bottom:14px">
         <div><div style="font-size:13px;opacity:.9">Hi ${esc(ME.name)} 👋</div>
           <h1 style="font-size:22px">Level ${lvl} · ${ag.label}</h1></div>
-        <span class="chip" style="background:rgba(255,255,255,.18);border:none">🔥 ${ME.streak} day${ME.streak===1?"":"s"}</span>
+        <div style="text-align:right">
+          <span class="chip" style="background:rgba(255,255,255,.18);border:none">🔥 ${ME.streak}</span>
+          <button id="homeShop" class="chip" style="background:rgba(255,255,255,.18);border:none;margin-top:6px;cursor:pointer">🪙 ${getCoins(ME)}</button>
+        </div>
       </div>
       <div class="stat3">
         <div><div class="v">${ME.xp}</div><div class="l">Total XP</div></div>
@@ -623,6 +710,7 @@ async function renderHome(){
   $("#communityBtn").onclick=renderCommunity;
   $("#editHome").onclick=renderOrganize;
   $("#meav").onclick=()=>go("profile");
+  $("#homeShop").onclick=renderAvatarStudio;
   if(mine.length){
     const r=$("#recent");
     mine.slice(0,5).forEach(l=>{
@@ -860,6 +948,65 @@ async function renderCommunity(){
   });
 }
 
+/* ---------- AVATAR STUDIO (shop + customizer) ---------- */
+function renderAvatarStudio(){
+  let slot="base";
+  const lvl=levelFor(ME.xp);
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>Avatar Studio</div>
+      <button class="btn sm alt" id="as_back">Done</button></div>
+    <div class="hero" style="margin-bottom:14px;text-align:center">
+      <div id="as_preview" style="display:flex;justify-content:center;margin-bottom:8px"></div>
+      <div style="font-weight:800;font-size:18px">${esc(ME.name)}</div>
+      <div class="row" style="justify-content:center;gap:8px;margin-top:8px">
+        <span class="chip" style="background:rgba(255,255,255,.18);border:none">Level ${lvl}</span>
+        <span class="chip" style="background:rgba(255,255,255,.18);border:none">🪙 <b id="as_coins">${getCoins(ME)}</b> coins</span>
+      </div>
+      <div style="font-size:11px;opacity:.9;margin-top:8px">Earn coins by working out — harder sessions pay more!</div>
+    </div>
+    <div class="seg" id="as_seg" style="margin-bottom:14px"></div>
+    <div class="grid" style="grid-template-columns:repeat(3,1fr)" id="as_grid"></div>
+   </div>`;
+  const seg=$("#as_seg");
+  SLOTS.forEach(s=>{const b=document.createElement("button");b.className=s.k===slot?"on":"";b.textContent=s.label;b.onclick=()=>{slot=s.k;[...seg.children].forEach(x=>x.classList.remove("on"));b.classList.add("on");draw();};seg.appendChild(b);});
+  function refreshPreview(){ $("#as_preview").innerHTML=avatarHTML(ME,84); $("#as_coins").textContent=getCoins(ME); }
+  function draw(){
+    refreshPreview();
+    const grid=$("#as_grid"); grid.innerHTML="";
+    const cfg=getAvatar(ME);
+    SHOP.filter(it=>it.slot===slot).forEach(it=>{
+      const owned=isOwned(ME,it);
+      const equipped = (cfg[slot]||"")===it.val || (slot==="base"&&!cfg.base&&it.val===ME.avatar);
+      const locked = lvl<it.level && !owned;
+      const swatch = slot==="bg"
+        ? `<div style="width:40px;height:40px;border-radius:50%;margin:0 auto;background:${it.val};border:2px solid var(--line)"></div>`
+        : `<div style="font-size:34px">${it.val||"🚫"}</div>`;
+      let status, cls="";
+      if(equipped){ status='<span style="color:var(--green);font-weight:700">Equipped ✓</span>'; cls="border-color:var(--green)"; }
+      else if(owned){ status='<span style="color:var(--teal);font-weight:700">Equip</span>'; }
+      else if(locked){ status='🔒 Lvl '+it.level; }
+      else { status='🪙 '+it.cost; }
+      const card=document.createElement("button"); card.className="badge"; card.style.cssText="cursor:pointer;"+cls;
+      card.innerHTML=`${swatch}<div class="n">${esc(it.name)}</div><div class="muted" style="font-size:11px">${status}</div>`;
+      card.onclick=async()=>{
+        if(equipped) return;
+        if(owned){ const c=Object.assign({},getAvatar(ME)); c[slot]=it.val; await avSave(ME,{cfg:c}); draw(); return; }
+        if(locked){ toast("Reach level "+it.level+" to unlock"); return; }
+        if(getCoins(ME)<it.cost){ toast("Need "+(it.cost-getCoins(ME))+" more coins"); return; }
+        if(!confirm("Buy “"+it.name+"” for "+it.cost+" coins?")) return;
+        const own=getOwned(ME).slice(); own.push(it.id);
+        const c=Object.assign({},getAvatar(ME)); c[slot]=it.val;
+        await avSave(ME,{coins:getCoins(ME)-it.cost, owned:own, cfg:c});
+        toast("Unlocked "+it.name+"! 🎉"); draw();
+      };
+      grid.appendChild(card);
+    });
+  }
+  draw();
+  $("#as_back").onclick=()=>go("profile");
+}
+
 /* ============================================================
    WORKOUT RUNNER  (sets, check-off, edit reps, rest timers)
    ============================================================ */
@@ -1002,12 +1149,16 @@ async function finishWorkout(){
   const perfect = done===tot;
   if(perfect) xp+=40;
   const early = new Date().getHours()<8;
+  // coins: harder exercises (higher impact) pay more per completed set
+  let coins=0;
+  s.items.forEach(it=>{ const dn=it.done.filter(Boolean).length; coins += dn*(it.ex.impact||1)*2; });
+  coins += perfect?15:5;
   // per-exercise best result (for progression next time)
   const exResults=s.items.filter(it=>it.role==="main").map(it=>{
     const doneReps=it.reps.filter((r,idx)=>it.done[idx]);
     return {id:it.ex.id, name:it.ex.name, unit:it.unit, best:doneReps.length?Math.max(...doneReps):0};
   }).filter(r=>r.best>0);
-  const details={early, perfect, parts:[...new Set(s.items.map(i=>i.ex.part))], ex:exResults};
+  const details={early, perfect, parts:[...new Set(s.items.map(i=>i.ex.part))], ex:exResults, coins};
   // streak
   let streak=ME.streak||0, best=ME.best_streak||0;
   if(ME.last_workout!==todayStr()){
@@ -1024,11 +1175,12 @@ async function finishWorkout(){
     await DB.updateProfile(ME.id,{xp:newXP,streak,best_streak:best,last_workout:todayStr()});
   }catch(e){ alert("Save failed: "+e.message); }
   ME.xp=newXP; ME.streak=streak; ME.best_streak=best; ME.last_workout=todayStr();
+  await addCoins(ME, coins);   // bank the coins earned
   PROFILES=await DB.getProfiles().catch(()=>PROFILES);
   ME=PROFILES.find(p=>p.id===ME.id)||ME;
   await loadPRs();           // refresh progression for next time
   SESSION=null; FINISHING=false;
-  renderSummary({xp,mins,done,tot,perfect,streak});
+  renderSummary({xp,mins,done,tot,perfect,streak,coins});
 }
 
 function renderSummary(r){
@@ -1044,14 +1196,16 @@ function renderSummary(r){
     <div class="card" style="margin-bottom:14px">
       <div class="stat3">
         <div><div class="v" style="color:var(--orange)">+${r.xp}</div><div class="l muted">XP earned</div></div>
-        <div><div class="v" style="color:var(--teal)">${r.done}/${r.tot}</div><div class="l muted">Sets done</div></div>
-        <div><div class="v" style="color:var(--amber)">🔥${r.streak}</div><div class="l muted">Streak</div></div>
+        <div><div class="v" style="color:var(--amber)">🪙 +${r.coins||0}</div><div class="l muted">Coins</div></div>
+        <div><div class="v" style="color:var(--coral)">🔥${r.streak}</div><div class="l muted">Streak</div></div>
       </div>
-      <div class="muted" style="margin-top:12px;font-size:13px">${r.mins} min · Level ${lvl}</div>
+      <div class="muted" style="margin-top:12px;font-size:13px">${r.done}/${r.tot} sets · ${r.mins} min · Level ${lvl} · 🪙 ${getCoins(ME)} total</div>
     </div>
-    <button class="btn" id="sm_home">Back to home</button>
-    <button class="btn teal" style="margin-top:10px" id="sm_lb">See the squad 🏆</button>
+    <button class="btn" id="sm_shop">🛍️ Spend coins in the Avatar Studio</button>
+    <button class="btn alt" id="sm_home" style="margin-top:10px">Back to home</button>
+    <button class="btn alt" id="sm_lb" style="margin-top:10px">See the squad 🏆</button>
    </div>`;
+  $("#sm_shop").onclick=renderAvatarStudio;
   $("#sm_home").onclick=()=>go("home");
   $("#sm_lb").onclick=()=>go("leaderboard");
   checkNewBadges();
@@ -1101,7 +1255,7 @@ async function renderLeaderboard(){
       const isMe=p.id===ME.id;
       const row=document.createElement("div"); row.className="lb-row"; if(isMe) row.style.borderColor=ME.color;
       row.innerHTML=`<div class="rank">${medals[i]||(i+1)}</div>
-        <div class="wico" style="width:40px;height:40px;background:${p.color}22;color:${p.color};font-size:20px">${p.avatar}</div>
+        ${avatarHTML(p,40)}
         <div style="flex:1"><div style="font-weight:800">${esc(p.name)}${isMe?' <span class="tag" style="background:'+ME.color+'33;color:'+ME.color+'">you</span>':''}</div>
         <div class="muted" style="font-size:12px">${ag.label} · Lv ${levelFor(p.xp)}</div></div>
         <span class="chip">${metric}</span>`;
@@ -1159,9 +1313,10 @@ async function renderProfile(){
     <div class="topbar"><div class="logo"><span class="dot"></span>Profile</div>
       <span class="pill">☁️ Synced</span></div>
     <div class="card center" style="margin-bottom:16px">
-      <div class="avatar" style="width:74px;height:74px;font-size:38px;margin:0 auto 10px;background:${ME.color}22;color:${ME.color}">${ME.avatar}</div>
+      <div style="display:flex;justify-content:center;margin:0 auto 10px">${avatarHTML(ME,84)}</div>
       <h2>${esc(ME.name)}</h2>
-      <div class="muted">Level ${levelFor(ME.xp)} · ${ME.xp} XP · 🔥 ${ME.streak}</div>
+      <div class="muted">Level ${levelFor(ME.xp)} · ${ME.xp} XP · 🔥 ${ME.streak} · 🪙 ${getCoins(ME)}</div>
+      <button class="btn teal sm" id="pf_avatar" style="margin-top:12px">🎨 Customize avatar &amp; shop</button>
       <div class="field" style="margin-top:16px;text-align:left"><label>Age group (changes intensity & rest)</label>
         <select id="pf_age"></select></div>
       <div class="muted" style="font-size:12px;text-align:left">${ag.emoji} ${ag.note} — ${ag.sets} sets · default ${ag.restSet}s set rest · ${ag.restEx}s between exercises</div>
@@ -1213,6 +1368,7 @@ async function renderProfile(){
   $("#rs_reset").onclick=async()=>{ localStorage.removeItem(restKey(ME.id)); delete ME.rest_set; delete ME.rest_ex;
     try{ await DB.updateProfile(ME.id,{rest_set:null,rest_ex:null}); }catch(e){}
     toast("Rest reset to age default"); go("profile"); };
+  $("#pf_avatar").onclick=renderAvatarStudio;
   $("#pf_switch").onclick=()=>{ localStorage.removeItem(ME_KEY); ME=null; $("#nav").classList.add("hidden"); renderProfiles(); };
   $("#pf_del").onclick=async()=>{ if(confirm("Delete "+ME.name+"'s profile and all their logs?")){ await DB.deleteProfile(ME.id); localStorage.removeItem(ME_KEY); ME=null; PROFILES=await DB.getProfiles().catch(()=>[]); $("#nav").classList.add("hidden"); renderProfiles(); } };
 }
