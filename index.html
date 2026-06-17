@@ -271,6 +271,10 @@ const DB = {
     if(isCloud()){ const {data,error}=await sb.from('workout_logs').insert(log).select().single(); if(error) throw error; return data; }
     log.id=uid(); log.created_at=new Date().toISOString();
     const d=lget(); d.logs.push(log); lset(d); return log;
+  },
+  async deleteLog(id){
+    if(isCloud()){ const {error}=await sb.from('workout_logs').delete().eq('id',id); if(error) throw error; return; }
+    const d=lget(); d.logs=d.logs.filter(l=>l.id!==id); lset(d);
   }
 };
 
@@ -306,6 +310,25 @@ function computePRs(logs){
   return map;
 }
 async function loadPRs(){ const logs=await DB.getLogs(ME.id).catch(()=>[]); MYPR=computePRs(logs); return MYPR; }
+
+/* recompute streaks from a sorted, de-duped list of workout dates */
+function streaksFromDates(dates){
+  if(!dates.length) return {streak:0, best:0, last:null};
+  let best=1, trail=1;
+  for(let i=1;i<dates.length;i++){ const g=daysBetween(dates[i-1],dates[i]); if(g===1){trail++;}else if(g!==0){trail=1;} best=Math.max(best,trail); }
+  return {streak:trail, best, last:dates[dates.length-1]};
+}
+/* delete one workout log and roll back its effect on XP / streak */
+async function deleteLogAndRecompute(logId){
+  await DB.deleteLog(logId);
+  const logs=await DB.getLogs(ME.id).catch(()=>[]);
+  const xp=logs.reduce((a,l)=>a+(l.xp_earned||0),0);
+  const dates=[...new Set(logs.map(l=>l.date))].sort();
+  const st=streaksFromDates(dates);
+  try{ await DB.updateProfile(ME.id,{xp, streak:st.streak, best_streak:st.best, last_workout:st.last}); }catch(e){}
+  ME.xp=xp; ME.streak=st.streak; ME.best_streak=st.best; ME.last_workout=st.last;
+  PROFILES=await DB.getProfiles().catch(()=>PROFILES); ME=PROFILES.find(p=>p.id===ME.id)||ME;
+}
 const CHALLENGE_STEP=ex=>ex.unit==="sec"?5:2;   // extra on the challenge set
 const PROGRESS_STEP=ex=>ex.unit==="sec"?5:1;    // steady week-over-week bump
 const app=()=>document.getElementById("app");
@@ -523,10 +546,22 @@ async function renderHome(){
   $("#meav").onclick=()=>go("profile");
   if(mine.length){
     const r=$("#recent");
-    mine.slice(0,4).forEach(l=>{
+    mine.slice(0,5).forEach(l=>{
       const d=document.createElement("div"); d.className="card"; d.style.padding="12px";
-      d.innerHTML=`<div class="row between"><div style="font-weight:700">${esc(l.workout_name)}</div><span class="chip">+${l.xp_earned} XP</span></div>
+      d.innerHTML=`<div class="row between">
+          <div style="font-weight:700">${esc(l.workout_name)}</div>
+          <div class="row" style="gap:8px"><span class="chip">+${l.xp_earned} XP</span>
+            <button class="del-log" title="Delete this workout" style="background:none;font-size:16px;line-height:1;padding:4px;color:var(--muted)">🗑️</button></div>
+        </div>
         <div class="muted" style="font-size:12px;margin-top:4px">${l.date} · ${l.done_sets}/${l.total_sets} sets · ${l.duration_min} min</div>`;
+      d.querySelector(".del-log").onclick=async(ev)=>{
+        ev.stopPropagation();
+        if(!confirm("Delete this “"+l.workout_name+"” workout? Its XP and streak will be rolled back.")) return;
+        const btn=ev.currentTarget; btn.textContent="…"; btn.disabled=true;
+        try{ await deleteLogAndRecompute(l.id); toast("Workout removed"); }
+        catch(e){ alert("Could not delete: "+e.message); }
+        renderHome();
+      };
       r.appendChild(d);
     });
   }
