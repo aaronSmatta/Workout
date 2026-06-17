@@ -197,18 +197,18 @@ const TEMPLATES = [
    warm:["march"], main:["catcow","armcircle","hipcircle","birddog","glute","hamstr"], cool:["shoulder"]},
 ];
 
-/* ---------- BADGES ---------- */
+/* ---------- BADGES ----------  coins = one-time currency lump sum on unlock */
 const BADGES = [
-  {id:"first",   e:"🌱", n:"First Step",    test:s=>s.workouts>=1,   d:"Complete 1 workout"},
-  {id:"five",    e:"🖐️", n:"High Five",      test:s=>s.workouts>=5,   d:"Complete 5 workouts"},
-  {id:"ten",     e:"💥", n:"Double Digits",  test:s=>s.workouts>=10,  d:"Complete 10 workouts"},
-  {id:"streak3", e:"🔥", n:"On Fire",        test:s=>s.bestStreak>=3, d:"3-day streak"},
-  {id:"streak7", e:"⚡", n:"Unstoppable",    test:s=>s.bestStreak>=7, d:"7-day streak"},
-  {id:"xp500",   e:"⭐", n:"Rising Star",    test:s=>s.xp>=500,       d:"Earn 500 XP"},
-  {id:"xp1500",  e:"🌟", n:"All-Star",       test:s=>s.xp>=1500,      d:"Earn 1500 XP"},
-  {id:"allround",e:"🎯", n:"Well Rounded",   test:s=>s.types>=4,      d:"Try 4 workout types"},
-  {id:"early",   e:"🌅", n:"Early Bird",     test:s=>s.early,         d:"Finish before 8am"},
-  {id:"perfect", e:"💯", n:"Perfectionist",  test:s=>s.perfect,       d:"Finish every set in a workout"},
+  {id:"first",   e:"🌱", n:"First Step",    test:s=>s.workouts>=1,   d:"Complete 1 workout",            coins:30},
+  {id:"five",    e:"🖐️", n:"High Five",      test:s=>s.workouts>=5,   d:"Complete 5 workouts",           coins:60},
+  {id:"ten",     e:"💥", n:"Double Digits",  test:s=>s.workouts>=10,  d:"Complete 10 workouts",          coins:120},
+  {id:"streak3", e:"🔥", n:"On Fire",        test:s=>s.bestStreak>=3, d:"3-day streak",                  coins:50},
+  {id:"streak7", e:"⚡", n:"Unstoppable",    test:s=>s.bestStreak>=7, d:"7-day streak",                  coins:140},
+  {id:"xp500",   e:"⭐", n:"Rising Star",    test:s=>s.xp>=500,       d:"Earn 500 XP",                   coins:80},
+  {id:"xp1500",  e:"🌟", n:"All-Star",       test:s=>s.xp>=1500,      d:"Earn 1500 XP",                  coins:220},
+  {id:"allround",e:"🎯", n:"Well Rounded",   test:s=>s.types>=4,      d:"Try 4 workout types",           coins:90},
+  {id:"early",   e:"🌅", n:"Early Bird",     test:s=>s.early,         d:"Finish before 8am",             coins:60},
+  {id:"perfect", e:"💯", n:"Perfectionist",  test:s=>s.perfect,       d:"Finish every set in a workout", coins:75},
 ];
 
 /* ---------- LEVELS ---------- */
@@ -366,47 +366,83 @@ function allWorkouts(p){
 const isCustomKey=k=>typeof k==="string" && k.indexOf("cw-")===0;
 
 /* ============================================================
-   AVATAR STUDIO  —  coins, owned items, shop catalog
+   AVATAR STUDIO  —  coins, owned items, drawn SVG character
+   A cute, calm bust character is composed from layered parts.
    ============================================================ */
-// slot: base | hat | glasses | pet | bg.  level = min level to buy.
-const SHOP=[
-  // bases (characters)
-  {id:"b_flex", slot:"base", name:"Flex", val:"💪", cost:0,  level:1},
-  {id:"b_face", slot:"base", name:"Classic", val:"🧑", cost:0, level:1},
-  {id:"b_lion", slot:"base", name:"Lion", val:"🦁", cost:60,  level:2},
-  {id:"b_tiger",slot:"base", name:"Tiger", val:"🐯", cost:90,  level:3},
-  {id:"b_panda",slot:"base", name:"Panda", val:"🐼", cost:140, level:4},
-  {id:"b_fox",  slot:"base", name:"Fox", val:"🦊", cost:180,  level:5},
-  {id:"b_robot",slot:"base", name:"Robot", val:"🤖", cost:280, level:7},
-  {id:"b_dragon",slot:"base",name:"Dragon", val:"🐲", cost:450,level:9},
-  // hats
-  {id:"h_none", slot:"hat", name:"No hat", val:"", cost:0, level:1},
-  {id:"h_cap",  slot:"hat", name:"Cap", val:"🧢", cost:40, level:2},
-  {id:"h_grad", slot:"hat", name:"Grad cap", val:"🎓", cost:80, level:3},
-  {id:"h_helm", slot:"hat", name:"Helmet", val:"⛑️", cost:110, level:4},
-  {id:"h_tophat",slot:"hat",name:"Top hat", val:"🎩", cost:160, level:5},
-  {id:"h_crown",slot:"hat", name:"Crown", val:"👑", cost:400, level:9},
-  // glasses
-  {id:"g_none", slot:"glasses", name:"None", val:"", cost:0, level:1},
-  {id:"g_specs",slot:"glasses", name:"Glasses", val:"👓", cost:50, level:2},
-  {id:"g_shades",slot:"glasses",name:"Shades", val:"🕶️", cost:80, level:3},
-  {id:"g_goggles",slot:"glasses",name:"Goggles", val:"🥽", cost:120, level:5},
-  // pets
-  {id:"p_none", slot:"pet", name:"No pet", val:"", cost:0, level:1},
-  {id:"p_dog",  slot:"pet", name:"Puppy", val:"🐶", cost:120, level:3},
-  {id:"p_cat",  slot:"pet", name:"Kitten", val:"🐱", cost:120, level:3},
-  {id:"p_parrot",slot:"pet",name:"Parrot", val:"🦜", cost:220, level:6},
-  {id:"p_dragon",slot:"pet",name:"Baby dragon", val:"🐉", cost:500, level:10},
-  // backgrounds (val = color)
-  {id:"bg_orange",slot:"bg", name:"Sunset", val:"#ff6b35", cost:0, level:1},
-  {id:"bg_teal", slot:"bg", name:"Mint", val:"#1fd4b4", cost:30, level:2},
-  {id:"bg_blue", slot:"bg", name:"Ocean", val:"#4d7cff", cost:40, level:2},
-  {id:"bg_purple",slot:"bg",name:"Grape", val:"#9b6bff", cost:70, level:3},
-  {id:"bg_pink", slot:"bg", name:"Berry", val:"#ff4d6d", cost:70, level:3},
-  {id:"bg_gold", slot:"bg", name:"Gold", val:"#ffb02e", cost:200, level:7},
+// Free "Looks" basics — always available so anyone can make the
+// character look like them (inclusive across ages & skin tones).
+const SKIN_TONES=[
+  {id:"sk1",val:"#ffe0c2"},{id:"sk2",val:"#f7cba0"},{id:"sk3",val:"#eeb086"},
+  {id:"sk4",val:"#dd9b67"},{id:"sk5",val:"#c07c45"},{id:"sk6",val:"#9a5e30"}
 ];
-const SLOTS=[{k:"base",label:"Character"},{k:"hat",label:"Hat"},{k:"glasses",label:"Glasses"},{k:"pet",label:"Pet"},{k:"bg",label:"Background"}];
+const HAIR_COLORS=["#2b2b35","#4a3526","#6f4e37","#8d5a3c","#b5651d","#d9a441","#9aa0a6","#e9e3da","#ff9ebb","#7aa9ff"];
+const OUTFIT_COLORS=["#4d7cff","#ff6b35","#ff4d6d","#1fd4b4","#34d399","#9b6bff","#ffb02e","#5b6472","#f4f4f4","#2b2b35"];
+
+// Shop slots (buyable, level-gated). opt = style key the SVG reads.
+const SHOP=[
+  // hair styles
+  {id:"hair_short", slot:"hair", name:"Short",     opt:"short",  cost:0,   level:1},
+  {id:"hair_bangs", slot:"hair", name:"Bangs",     opt:"bangs",  cost:40,  level:1},
+  {id:"hair_bob",   slot:"hair", name:"Bob",       opt:"bob",    cost:60,  level:2},
+  {id:"hair_bun",   slot:"hair", name:"Top Bun",   opt:"bun",    cost:90,  level:3},
+  {id:"hair_pony",  slot:"hair", name:"Ponytail",  opt:"pony",   cost:90,  level:3},
+  {id:"hair_curly", slot:"hair", name:"Curly",     opt:"curly",  cost:120, level:4},
+  {id:"hair_long",  slot:"hair", name:"Long",      opt:"long",   cost:140, level:5},
+  {id:"hair_spiky", slot:"hair", name:"Spiky",     opt:"spiky",  cost:160, level:6},
+  // eyewear
+  {id:"g_none",   slot:"glasses", name:"None",     opt:"none",   cost:0,   level:1},
+  {id:"g_round",  slot:"glasses", name:"Round",    opt:"round",  cost:50,  level:2},
+  {id:"g_square", slot:"glasses", name:"Square",   opt:"square", cost:70,  level:3},
+  {id:"g_cat",    slot:"glasses", name:"Cat-eye",  opt:"cat",    cost:90,  level:4},
+  {id:"g_shades", slot:"glasses", name:"Shades",   opt:"shades", cost:120, level:5},
+  // clothes
+  {id:"out_tee",     slot:"outfit", name:"Tee",          opt:"tee",     cost:0,   level:1},
+  {id:"out_tank",    slot:"outfit", name:"Tank",         opt:"tank",    cost:50,  level:2},
+  {id:"out_polo",    slot:"outfit", name:"Polo",         opt:"polo",    cost:70,  level:2},
+  {id:"out_hoodie",  slot:"outfit", name:"Hoodie",       opt:"hoodie",  cost:90,  level:3},
+  {id:"out_sweater", slot:"outfit", name:"Sweater",      opt:"sweater", cost:120, level:4},
+  {id:"out_jacket",  slot:"outfit", name:"Track Jacket", opt:"jacket",  cost:130, level:4},
+  {id:"out_kimono",  slot:"outfit", name:"Kimono",       opt:"kimono",  cost:200, level:6},
+  // hats / headwear
+  {id:"hat_none",   slot:"hat", name:"None",      opt:"none",   cost:0,   level:1},
+  {id:"hat_band",   slot:"hat", name:"Headband",  opt:"band",   cost:40,  level:2},
+  {id:"hat_beanie", slot:"hat", name:"Beanie",    opt:"beanie", cost:70,  level:3},
+  {id:"hat_cap",    slot:"hat", name:"Cap",       opt:"cap",    cost:90,  level:3},
+  {id:"hat_bow",    slot:"hat", name:"Bow",       opt:"bow",    cost:80,  level:4},
+  {id:"hat_flower", slot:"hat", name:"Flower",    opt:"flower", cost:110, level:5},
+  {id:"hat_crown",  slot:"hat", name:"Crown",     opt:"crown",  cost:350, level:9},
+  // extras / outer accessories
+  {id:"acc_none",       slot:"accessory", name:"None",       opt:"none",       cost:0,   level:1},
+  {id:"acc_earbuds",    slot:"accessory", name:"Earbuds",    opt:"earbuds",    cost:60,  level:2},
+  {id:"acc_coffee",     slot:"accessory", name:"Coffee",     opt:"coffee",     cost:90,  level:3},
+  {id:"acc_scarf",      slot:"accessory", name:"Scarf",      opt:"scarf",      cost:100, level:4},
+  {id:"acc_headphones", slot:"accessory", name:"Headphones", opt:"headphones", cost:120, level:4},
+  {id:"acc_backpack",   slot:"accessory", name:"Backpack",   opt:"backpack",   cost:140, level:5},
+  // companion pet
+  {id:"pet_none",  slot:"pet", name:"None",   opt:"none",  cost:0,   level:1},
+  {id:"pet_cat",   slot:"pet", name:"Kitten", opt:"cat",   cost:120, level:3},
+  {id:"pet_dog",   slot:"pet", name:"Puppy",  opt:"dog",   cost:120, level:3},
+  {id:"pet_bunny", slot:"pet", name:"Bunny",  opt:"bunny", cost:150, level:4},
+  {id:"pet_bird",  slot:"pet", name:"Birdie", opt:"bird",  cost:180, level:6},
+  {id:"pet_panda", slot:"pet", name:"Panda",  opt:"panda", cost:300, level:8},
+  // backgrounds / scenes
+  {id:"bg_mint",     slot:"bg", name:"Mint",     opt:"mint",     cost:0,   level:1},
+  {id:"bg_sky",      slot:"bg", name:"Sky",      opt:"sky",      cost:30,  level:1},
+  {id:"bg_peach",    slot:"bg", name:"Peach",    opt:"peach",    cost:30,  level:2},
+  {id:"bg_lavender", slot:"bg", name:"Lavender", opt:"lavender", cost:40,  level:2},
+  {id:"bg_sunset",   slot:"bg", name:"Sunset",   opt:"sunset",   cost:80,  level:3},
+  {id:"bg_ocean",    slot:"bg", name:"Ocean",    opt:"ocean",    cost:80,  level:3},
+  {id:"bg_sakura",   slot:"bg", name:"Sakura",   opt:"sakura",   cost:150, level:5},
+  {id:"bg_night",    slot:"bg", name:"Night",    opt:"night",    cost:200, level:7},
+];
+const SHOP_SLOTS=[
+  {k:"hair",label:"Hair"},{k:"glasses",label:"Eyewear"},{k:"outfit",label:"Clothes"},
+  {k:"hat",label:"Hats"},{k:"accessory",label:"Extras"},{k:"pet",label:"Pet"},{k:"bg",label:"Scene"}
+];
 const shopItem=id=>SHOP.find(s=>s.id===id);
+const optsFor=slot=>SHOP.filter(s=>s.slot===slot).map(s=>s.opt);
+const AV_DEFAULT={skin:"#eeb086",hair:"short",hairColor:"#2b2b35",glasses:"none",
+  outfit:"tee",outfitColor:"#4d7cff",hat:"none",accessory:"none",pet:"none",bg:"mint"};
 
 function avKey(id){ return "fitcircle_av_"+id; }   // {coins, owned:[], cfg:{}}
 function avStore(p){
@@ -419,9 +455,16 @@ function avStore(p){
 function getCoins(p){ return avStore(p).coins||0; }
 function getOwned(p){ return avStore(p).owned||[]; }
 function isOwned(p,item){ return item.cost===0 || getOwned(p).indexOf(item.id)>=0; }
-function getAvatar(p){
-  const cfg=avStore(p).cfg||{};
-  return {base:cfg.base||p.avatar||"💪", hat:cfg.hat||"", glasses:cfg.glasses||"", pet:cfg.pet||"", bg:cfg.bg||p.color||"#ff6b35"};
+function rawCfg(p){ const c=avStore(p).cfg; return (c&&typeof c==="object")?c:{}; }
+function getCoined(p){ const c=rawCfg(p); return Array.isArray(c._coined)?c._coined:[]; }
+/* normalized, validated avatar config (legacy emoji configs fall back to defaults) */
+function getCfg(p){
+  const c=rawCfg(p), out=Object.assign({},AV_DEFAULT);
+  if(SKIN_TONES.some(s=>s.val===c.skin)) out.skin=c.skin;
+  if(HAIR_COLORS.includes(c.hairColor)) out.hairColor=c.hairColor;
+  if(OUTFIT_COLORS.includes(c.outfitColor)) out.outfitColor=c.outfitColor;
+  ["hair","glasses","outfit","hat","accessory","pet","bg"].forEach(sl=>{ if(optsFor(sl).includes(c[sl])) out[sl]=c[sl]; });
+  return out;
 }
 async function avSave(p, next){   // next: partial {coins, owned, cfg}
   const cur=avStore(p);
@@ -430,18 +473,150 @@ async function avSave(p, next){   // next: partial {coins, owned, cfg}
   p.coins=merged.coins; p.owned=merged.owned; p.avatar_cfg=merged.cfg;
   try{ await DB.updateProfile(p.id,{coins:merged.coins, owned:merged.owned, avatar_cfg:merged.cfg}); }catch(e){}
 }
+async function setCfg(p, patch){ const c=Object.assign({}, rawCfg(p), patch); await avSave(p,{cfg:c}); }
 async function addCoins(p, amt){ await avSave(p,{coins:getCoins(p)+amt}); }
 
-/* layered avatar HTML for any size */
+/* award one-time coin lump sums for any newly-earned (unpaid) achievements */
+async function awardBadgeCoins(s){
+  if(!s){ const logs=await DB.getLogs().catch(()=>[]); s=statsFrom(ME,logs); }
+  const earned=BADGES.filter(b=>b.test(s));
+  const paid=getCoined(ME);
+  const fresh=earned.filter(b=>!paid.includes(b.id));
+  if(!fresh.length) return {total:0, fresh:[]};
+  const total=fresh.reduce((a,b)=>a+(b.coins||0),0);
+  const c=Object.assign({}, rawCfg(ME), {_coined: paid.concat(fresh.map(b=>b.id))});
+  await avSave(ME,{coins:getCoins(ME)+total, cfg:c});
+  return {total, fresh};
+}
+
+/* ---------- DRAWN SVG AVATAR ---------- */
+function partHairBack(opt,c){
+  switch(opt){
+    case "bob":  return `<path d="M26,44 C26,25 37,16 50,16 C63,16 74,25 74,44 L74,60 Q74,64 70,64 L70,46 Q70,30 50,30 Q30,30 30,46 L30,64 Q26,64 26,60 Z" fill="${c}"/>`;
+    case "long": return `<path d="M24,46 C24,24 36,14 50,14 C64,14 76,24 76,46 L76,90 Q76,93 72,92 Q73,68 70,50 Q70,30 50,30 Q30,30 30,50 Q27,68 28,92 Q24,93 24,90 Z" fill="${c}"/>`;
+    case "pony": return `<path d="M67,30 Q88,33 86,54 Q84,70 72,66 Q82,52 72,38 Z" fill="${c}"/>`;
+    default: return "";
+  }
+}
+function partHairFront(opt,c){
+  const dome="M27,46 C26,26 38,17 50,17 C62,17 74,26 73,46";
+  const cap=`<path d="${dome} C70,34 64,29 50,29 C36,29 30,34 27,46 Z" fill="${c}"/>`;
+  switch(opt){
+    case "short": return cap;
+    case "bangs": return `<path d="${dome} C73,40 70,37 65,37 Q61,42 57,37 Q53,42 49,37 Q45,42 41,37 Q37,42 33,37 C29,38 27,41 27,46 Z" fill="${c}"/>`;
+    case "bob":   return `<path d="${dome} C73,38 69,33 50,33 C31,33 27,38 27,46 Z" fill="${c}"/>`;
+    case "long":  return `<path d="${dome} C73,38 69,32 50,32 C31,32 27,38 27,46 Z" fill="${c}"/>`;
+    case "pony":  return cap;
+    case "bun":   return `<circle cx="50" cy="14" r="8" fill="${c}"/>`+cap;
+    case "curly": return `<path d="M27,45 Q22,37 30,33 Q27,24 37,24 Q39,16 50,16 Q61,16 63,24 Q73,24 70,33 Q78,37 73,45 Q70,35 62,33 Q58,28 50,28 Q42,28 38,33 Q30,35 27,45 Z" fill="${c}"/>`;
+    case "spiky": return `<path d="M27,46 L31,30 L37,40 L42,24 L48,38 L52,22 L58,38 L63,26 L68,40 L73,32 L73,46 C70,34 64,29 50,29 C36,29 30,34 27,46 Z" fill="${c}"/>`;
+    default: return cap;
+  }
+}
+function partGlasses(opt){
+  const fr="#3a3340";
+  switch(opt){
+    case "round":  return `<g fill="rgba(255,255,255,.18)" stroke="${fr}" stroke-width="2"><circle cx="42" cy="46" r="6"/><circle cx="58" cy="46" r="6"/><line x1="48" y1="46" x2="52" y2="46"/></g>`;
+    case "square": return `<g fill="rgba(255,255,255,.18)" stroke="${fr}" stroke-width="2"><rect x="35.5" y="41" width="13" height="10" rx="2.5"/><rect x="51.5" y="41" width="13" height="10" rx="2.5"/><line x1="48.5" y1="46" x2="51.5" y2="46"/></g>`;
+    case "cat":    return `<g fill="rgba(255,255,255,.18)" stroke="${fr}" stroke-width="2"><path d="M36,49 Q34,41 43,41 Q49,42 48,47 Q42,51 36,49 Z"/><path d="M64,49 Q66,41 57,41 Q51,42 52,47 Q58,51 64,49 Z"/></g>`;
+    case "shades": return `<g fill="#2b2b33"><rect x="35" y="42" width="13" height="8" rx="3"/><rect x="52" y="42" width="13" height="8" rx="3"/><rect x="47" y="44" width="6" height="2"/></g>`;
+    default: return "";
+  }
+}
+function outfitDetail(opt){
+  switch(opt){
+    case "tee":     return `<path d="M44,69 Q50,75 56,69" fill="none" stroke="rgba(0,0,0,.12)" stroke-width="2"/>`;
+    case "tank":    return `<path d="M41,72 L45,69 Q50,74 55,69 L59,72" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="2.4"/>`;
+    case "polo":    return `<path d="M50,70 L44,79 L50,79 L56,79 L50,70" fill="rgba(255,255,255,.45)"/><circle cx="50" cy="84" r="1.2" fill="rgba(0,0,0,.2)"/>`;
+    case "hoodie":  return `<path d="M40,71 Q50,80 60,71" fill="none" stroke="rgba(0,0,0,.18)" stroke-width="3"/><line x1="47" y1="77" x2="47" y2="93" stroke="#fff" stroke-width="1.4"/><line x1="53" y1="77" x2="53" y2="93" stroke="#fff" stroke-width="1.4"/>`;
+    case "sweater": return `<path d="M40,79 Q50,84 60,79" fill="none" stroke="rgba(0,0,0,.12)" stroke-width="2"/><path d="M16,91 H84" stroke="rgba(0,0,0,.1)" stroke-width="2"/>`;
+    case "jacket":  return `<line x1="50" y1="70" x2="50" y2="100" stroke="rgba(0,0,0,.28)" stroke-width="2"/><path d="M44,70 Q50,75 56,70" fill="none" stroke="#fff" stroke-width="2"/>`;
+    case "kimono":  return `<path d="M50,70 L41,100 M50,70 L59,100" stroke="rgba(0,0,0,.2)" stroke-width="2" fill="none"/><path d="M44,70 L50,80 L56,70 Z" fill="rgba(255,255,255,.5)"/><rect x="40" y="86" width="20" height="5" fill="rgba(0,0,0,.2)"/>`;
+    default: return "";
+  }
+}
+function accPieces(opt){
+  let body="",earL="",earR="",band="",front="";
+  switch(opt){
+    case "earbuds": earL=`<circle cx="29" cy="48" r="2.4" fill="#fff" stroke="#cfcfcf"/>`;
+                    earR=`<circle cx="71" cy="48" r="2.4" fill="#fff" stroke="#cfcfcf"/><path d="M71,50 q3,9 -6,13" fill="none" stroke="#fff" stroke-width="1.4"/>`; break;
+    case "headphones": band=`<path d="M26,42 Q50,4 74,42" fill="none" stroke="#2b2b33" stroke-width="3.5"/>`;
+                    earL=`<rect x="22" y="40" width="9" height="14" rx="4" fill="#2b2b33"/>`;
+                    earR=`<rect x="69" y="40" width="9" height="14" rx="4" fill="#2b2b33"/>`; break;
+    case "backpack": body=`<g stroke="#ff7a3c" stroke-width="3.5" stroke-linecap="round"><line x1="42" y1="74" x2="38" y2="99"/><line x1="58" y1="74" x2="62" y2="99"/></g>`; break;
+    case "scarf": body=`<path d="M36,65 Q50,76 64,65 L64,71 Q50,82 36,71 Z" fill="#ff5d7a"/><path d="M58,69 L63,92 L54,92 L52,70 Z" fill="#e84d68"/>`; break;
+    case "coffee": front=`<g transform="translate(78,82)"><path d="M-6,-4 H6 L4.5,9 A2,2 0 0 1 2.5,11 H-2.5 A2,2 0 0 1 -4.5,9 Z" fill="#fff" stroke="#dcdcdc"/><rect x="-6.5" y="-6" width="13" height="3" rx="1.5" fill="#c98a5e"/><path d="M0,-9 q3,-3 0,-6" fill="none" stroke="#cdb8a8" stroke-width="1.2"/></g>`; break;
+  }
+  return {body,earL,earR,band,front};
+}
+function partPet(opt){
+  if(!opt||opt==="none") return "";
+  const faces={
+    cat:`<circle r="9" fill="#f4a259"/><path d="M-8,-6 L-5,-12 L-2,-6 Z" fill="#f4a259"/><path d="M8,-6 L5,-12 L2,-6 Z" fill="#f4a259"/><circle cx="-3" cy="-1" r="1.2" fill="#3a3340"/><circle cx="3" cy="-1" r="1.2" fill="#3a3340"/><path d="M-2,3 Q0,5 2,3" fill="none" stroke="#3a3340" stroke-width="1"/>`,
+    dog:`<circle r="9" fill="#c8956c"/><ellipse cx="-8" cy="-3" rx="3" ry="5" fill="#9c6b45"/><ellipse cx="8" cy="-3" rx="3" ry="5" fill="#9c6b45"/><circle cx="-3" cy="-1" r="1.2" fill="#3a3340"/><circle cx="3" cy="-1" r="1.2" fill="#3a3340"/><circle cx="0" cy="3" r="1.4" fill="#3a3340"/>`,
+    bunny:`<circle r="9" fill="#f3e6ef"/><ellipse cx="-3" cy="-12" rx="2.4" ry="6" fill="#f3e6ef"/><ellipse cx="3" cy="-12" rx="2.4" ry="6" fill="#f3e6ef"/><circle cx="-3" cy="-1" r="1.2" fill="#3a3340"/><circle cx="3" cy="-1" r="1.2" fill="#3a3340"/><circle cx="0" cy="3" r="1.2" fill="#ff9eb0"/>`,
+    bird:`<circle r="8" fill="#7ec4e8"/><circle cx="-2.5" cy="-1" r="1.2" fill="#3a3340"/><circle cx="2.5" cy="-1" r="1.2" fill="#3a3340"/><path d="M0,2 L4,4 L0,5 Z" fill="#ffcf3f"/>`,
+    panda:`<circle r="9" fill="#fff"/><circle cx="-8" cy="-7" r="3" fill="#2b2b33"/><circle cx="8" cy="-7" r="3" fill="#2b2b33"/><ellipse cx="-3" cy="-1" rx="2.4" ry="3" fill="#2b2b33"/><ellipse cx="3" cy="-1" rx="2.4" ry="3" fill="#2b2b33"/><circle cx="-3" cy="-1" r="1" fill="#fff"/><circle cx="3" cy="-1" r="1" fill="#fff"/>`
+  };
+  return `<g transform="translate(19,85)">${faces[opt]||""}</g>`;
+}
+function bgScene(opt,u){
+  const solid={mint:"#cfeee4",sky:"#d3e8ff",peach:"#ffe0d2",lavender:"#e6dcff"};
+  if(solid[opt]) return {def:"",rect:`<rect width="100" height="100" fill="${solid[opt]}"/>`};
+  const grad=(a,b)=>({def:`<linearGradient id="bg${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`,rect:`<rect width="100" height="100" fill="url(#bg${u})"/>`});
+  if(opt==="sunset") return grad("#ffd29a","#ff9ab0");
+  if(opt==="ocean")  return grad("#9fe7df","#7db9ff");
+  if(opt==="night"){ const g=grad("#2b2d54","#4a3a6b"); g.rect+=`<g fill="#fff7d6"><circle cx="18" cy="16" r="1"/><circle cx="80" cy="14" r="1.2"/><circle cx="88" cy="40" r="0.9"/><circle cx="12" cy="38" r="0.9"/></g>`; return g; }
+  if(opt==="sakura") return {def:"",rect:`<rect width="100" height="100" fill="#ffe3ee"/><g fill="#ff9ec2" opacity=".8"><circle cx="14" cy="16" r="2"/><circle cx="82" cy="12" r="1.6"/><circle cx="90" cy="34" r="2"/><circle cx="10" cy="42" r="1.6"/></g>`};
+  return {def:"",rect:`<rect width="100" height="100" fill="#cfeee4"/>`};
+}
+/* compose the full character from a normalized cfg */
+function avatarSVG(cfg,size){
+  size=size||44;
+  const u=Math.random().toString(36).slice(2,7);
+  const sc=cfg.skin, hc=cfg.hairColor, oc=cfg.outfitColor;
+  const bg=bgScene(cfg.bg,u), acc=accPieces(cfg.accessory);
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">`
+    +`<defs>${bg.def}</defs>`
+    +bg.rect
+    +partPet(cfg.pet)
+    +partHairBack(cfg.hair,hc)
+    +`<rect x="44" y="58" width="12" height="14" rx="5" fill="${sc}"/>`
+    +`<path d="M14,100 L14,90 C14,76 30,69 50,69 C70,69 86,76 86,90 L86,100 Z" fill="${oc}"/>`
+    +outfitDetail(cfg.outfit)
+    +acc.body
+    +`<ellipse cx="29" cy="47" rx="5" ry="6" fill="${sc}"/>`
+    +`<ellipse cx="71" cy="47" rx="5" ry="6" fill="${sc}"/>`
+    +`<ellipse cx="50" cy="44" rx="22" ry="23" fill="${sc}"/>`
+    +`<ellipse cx="38" cy="52" rx="4" ry="2.6" fill="#ff9eb0" opacity=".55"/>`
+    +`<ellipse cx="62" cy="52" rx="4" ry="2.6" fill="#ff9eb0" opacity=".55"/>`
+    +`<ellipse cx="42" cy="46" rx="2.6" ry="3.2" fill="#3a3340"/>`
+    +`<ellipse cx="58" cy="46" rx="2.6" ry="3.2" fill="#3a3340"/>`
+    +`<circle cx="43" cy="45" r="0.9" fill="#fff"/><circle cx="59" cy="45" r="0.9" fill="#fff"/>`
+    +`<path d="M46,54 Q50,58 54,54" fill="none" stroke="#c4675f" stroke-width="1.6" stroke-linecap="round"/>`
+    +partHairFront(cfg.hair,hc)
+    +partGlasses(cfg.glasses)
+    +acc.earL+acc.earR+acc.band
+    +partHat(cfg.hat)
+    +acc.front
+    +`</svg>`;
+}
+function partHat(opt){
+  switch(opt){
+    case "band":   return `<rect x="27" y="26" width="46" height="6" rx="3" fill="#ff4d6d"/>`;
+    case "beanie": return `<path d="M28,30 C28,15 40,10 50,10 C60,10 72,15 72,30 Z" fill="#3a7d6e"/><rect x="27" y="28" width="46" height="5" rx="2.5" fill="#2f6457"/>`;
+    case "cap":    return `<path d="M28,30 C28,16 40,11 50,11 C60,11 72,16 72,30 Z" fill="#4d7cff"/><path d="M50,30 Q76,30 82,37 Q72,33 50,33 Z" fill="#3b63d6"/>`;
+    case "bow":    return `<g fill="#ff7aa8" transform="translate(50,21)"><path d="M0,0 L-10,-5 L-10,5 Z"/><path d="M0,0 L10,-5 L10,5 Z"/><circle r="3"/></g>`;
+    case "flower": return `<g transform="translate(66,22)"><g fill="#ff8fb3"><circle cx="0" cy="-4" r="2.6"/><circle cx="4" cy="-1" r="2.6"/><circle cx="2.4" cy="3.6" r="2.6"/><circle cx="-2.4" cy="3.6" r="2.6"/><circle cx="-4" cy="-1" r="2.6"/></g><circle r="2.2" fill="#ffd34d"/></g>`;
+    case "crown":  return `<path d="M33,28 L33,18 L41,24 L50,15 L59,24 L67,18 L67,28 Z" fill="#ffcf3f" stroke="#e0a92e" stroke-width="1"/><circle cx="50" cy="18" r="1.6" fill="#ff5d7a"/>`;
+    default: return "";
+  }
+}
+
+/* round-framed avatar for any size */
 function avatarHTML(p, size){
-  size=size||44; const a=getAvatar(p);
-  const fs=Math.round(size*0.52), hs=Math.round(size*0.4), gs=Math.round(size*0.34), ps=Math.round(size*0.4);
-  return `<div style="position:relative;width:${size}px;height:${size}px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${a.bg}22;border:2px solid ${a.bg};flex-shrink:0">
-    <span style="font-size:${fs}px;line-height:1">${a.base}</span>
-    ${a.hat?`<span style="position:absolute;top:${-Math.round(size*0.16)}px;font-size:${hs}px">${a.hat}</span>`:""}
-    ${a.glasses?`<span style="position:absolute;top:${Math.round(size*0.28)}px;font-size:${gs}px">${a.glasses}</span>`:""}
-    ${a.pet?`<span style="position:absolute;right:${-Math.round(size*0.12)}px;bottom:${-Math.round(size*0.08)}px;font-size:${ps}px">${a.pet}</span>`:""}
-  </div>`;
+  size=size||44;
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,.55);box-shadow:0 2px 8px rgba(0,0,0,.25);flex-shrink:0;background:#cfeee4;line-height:0">${avatarSVG(getCfg(p),size)}</div>`;
 }
 
 /* ---- Progression: most-recent achieved reps/seconds per exercise ---- */
@@ -601,39 +776,48 @@ function renderProfiles(){
 }
 
 function renderNewProfile(){
-  let sel={avatar:"💪",color:"var(--orange)",age:"adult"};
-  const avatars=["💪","🔥","⚡","🌟","🦁","🐯","🦅","🌸","🍀","🚀","🧗","🏃","🤸","🧘"];
+  let sel={skin:SKIN_TONES[2].val, hairColor:"#2b2b35", color:"#ff6b35", age:"adult"};
   const colors=["#ff6b35","#ff4d6d","#1fd4b4","#4d7cff","#9b6bff","#34d399","#ffb02e"];
   app().innerHTML=`
    <div class="fade">
     <div class="topbar"><div class="logo"><span class="dot"></span>New profile</div></div>
     <div class="card">
+      <div class="center" style="margin-bottom:6px"><div id="np_prev" style="display:flex;justify-content:center"></div></div>
       <div class="field"><label>Your name</label><input id="np_name" placeholder="e.g. Mei" maxlength="20"/></div>
-      <div class="field"><label>Pick an avatar</label><div class="row" style="flex-wrap:wrap;gap:8px" id="np_av"></div></div>
+      <div class="field"><label>Skin tone</label><div class="row" style="flex-wrap:wrap;gap:8px" id="np_skin"></div></div>
+      <div class="field"><label>Hair color</label><div class="row" style="flex-wrap:wrap;gap:8px" id="np_hair"></div></div>
       <div class="field"><label>Accent color</label><div class="row" style="flex-wrap:wrap;gap:10px" id="np_col"></div></div>
       <div class="field"><label>Age group — sets your intensity & rest</label>
         <div class="grid" style="grid-template-columns:repeat(3,1fr)" id="np_age"></div></div>
       <button class="btn" id="np_save">Create profile</button>
       <button class="btn alt" style="margin-top:10px" id="np_back">Cancel</button>
+      <p class="muted center" style="font-size:12px;margin-top:10px">Unlock hairstyles, glasses, clothes &amp; more in the Avatar Studio. ✨</p>
     </div>
    </div>`;
-  const av=$("#np_av"); avatars.forEach(a=>{const s=document.createElement("button");s.className="avatar";s.textContent=a;
-    s.onclick=()=>{sel.avatar=a;[...av.children].forEach(c=>c.style.borderColor="var(--line)");s.style.borderColor=sel.color;};av.appendChild(s);});
-  av.firstChild.style.borderColor=sel.color;
-  const col=$("#np_col"); colors.forEach(c=>{const s=document.createElement("button");s.style.cssText=`width:34px;height:34px;border-radius:50%;background:${c};border:3px solid transparent`;
-    s.onclick=()=>{sel.color=c;[...col.children].forEach(x=>x.style.borderColor="transparent");s.style.borderColor="#fff";};col.appendChild(s);});
-  col.firstChild.style.borderColor="#fff";
+  function prev(){ $("#np_prev").innerHTML=avatarHTML({avatar_cfg:{skin:sel.skin,hairColor:sel.hairColor,hair:"short",outfit:"tee",outfitColor:sel.color,bg:"mint",glasses:"none",hat:"none",accessory:"none",pet:"none"}},90); }
+  function picker(box, items, getVal, isSel, onPick){
+    items.forEach(it=>{ const v=getVal(it); const s=document.createElement("button");
+      s.style.cssText=`width:34px;height:34px;border-radius:50%;background:${v};border:3px solid ${isSel(v)?"#fff":"transparent"};cursor:pointer`;
+      s.onclick=()=>{ onPick(v); [...box.children].forEach(x=>x.style.borderColor="transparent"); s.style.borderColor="#fff"; prev(); }; box.appendChild(s); });
+  }
+  picker($("#np_skin"), SKIN_TONES, t=>t.val, v=>v===sel.skin, v=>sel.skin=v);
+  picker($("#np_hair"), HAIR_COLORS, c=>c, v=>v===sel.hairColor, v=>sel.hairColor=v);
+  picker($("#np_col"),  colors,      c=>c, v=>v===sel.color, v=>sel.color=v);
   const age=$("#np_age");
   Object.entries(AGE_GROUPS).forEach(([k,g])=>{const s=document.createElement("button");s.className="agechip"+(k==="adult"?" on":"");
     s.innerHTML=`<span class="e">${g.emoji}</span>${g.label}<div class="muted" style="font-weight:500;font-size:10px">${g.sub}</div>`;
     s.onclick=()=>{sel.age=k;[...age.children].forEach(c=>c.classList.remove("on"));s.classList.add("on");};age.appendChild(s);});
+  prev();
   $("#np_back").onclick=renderProfiles;
   $("#np_save").onclick=async()=>{
     const name=$("#np_name").value.trim(); if(!name){toast("Add a name first");return;}
     $("#np_save").textContent="Saving…"; $("#np_save").disabled=true;
     try{
-      const p=await DB.createProfile({name,age_group:sel.age,avatar:sel.avatar,color:sel.color});
+      const p=await DB.createProfile({name,age_group:sel.age,avatar:"🙂",color:sel.color});
       PROFILES=await DB.getProfiles(); ME=PROFILES.find(x=>x.id===p.id)||p;
+      await avSave(ME,{cfg:{skin:sel.skin,hairColor:sel.hairColor,
+        outfitColor:OUTFIT_COLORS.includes(sel.color)?sel.color:"#4d7cff",
+        hair:"short",outfit:"tee",bg:"mint",glasses:"none",hat:"none",accessory:"none",pet:"none"}});
       localStorage.setItem(ME_KEY,ME.id); toast("Welcome, "+name+"! 🎉"); showApp();
     }catch(e){ alert("Could not save: "+e.message); $("#np_save").textContent="Create profile"; $("#np_save").disabled=false; }
   };
@@ -950,7 +1134,7 @@ async function renderCommunity(){
 
 /* ---------- AVATAR STUDIO (shop + customizer) ---------- */
 function renderAvatarStudio(){
-  let slot="base";
+  let tab="looks";
   const lvl=levelFor(ME.xp);
   app().innerHTML=`
    <div class="fade">
@@ -963,47 +1147,72 @@ function renderAvatarStudio(){
         <span class="chip" style="background:rgba(255,255,255,.18);border:none">Level ${lvl}</span>
         <span class="chip" style="background:rgba(255,255,255,.18);border:none">🪙 <b id="as_coins">${getCoins(ME)}</b> coins</span>
       </div>
-      <div style="font-size:11px;opacity:.9;margin-top:8px">Earn coins by working out — harder sessions pay more!</div>
+      <div style="font-size:11px;opacity:.9;margin-top:8px">Earn coins from workouts &amp; achievements, then dress up your buddy.</div>
     </div>
-    <div class="seg" id="as_seg" style="margin-bottom:14px"></div>
-    <div class="grid" style="grid-template-columns:repeat(3,1fr)" id="as_grid"></div>
+    <div id="as_tabs" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;-webkit-overflow-scrolling:touch"></div>
+    <div id="as_panel"></div>
    </div>`;
-  const seg=$("#as_seg");
-  SLOTS.forEach(s=>{const b=document.createElement("button");b.className=s.k===slot?"on":"";b.textContent=s.label;b.onclick=()=>{slot=s.k;[...seg.children].forEach(x=>x.classList.remove("on"));b.classList.add("on");draw();};seg.appendChild(b);});
-  function refreshPreview(){ $("#as_preview").innerHTML=avatarHTML(ME,84); $("#as_coins").textContent=getCoins(ME); }
+  const tabs=[{k:"looks",label:"Looks"}].concat(SHOP_SLOTS);
+  const tabBar=$("#as_tabs");
+  tabs.forEach(t=>{
+    const b=document.createElement("button"); b.className="chip"; b.dataset.k=t.k;
+    b.style.cssText="white-space:nowrap;flex:0 0 auto;cursor:pointer"; b.textContent=t.label;
+    b.onclick=()=>{ tab=t.k; markTabs(); draw(); }; tabBar.appendChild(b);
+  });
+  function markTabs(){ [...tabBar.children].forEach(b=>{ const on=b.dataset.k===tab;
+    b.style.background=on?"var(--grad)":""; b.style.color=on?"#fff":""; b.style.borderColor=on?"transparent":""; }); }
+  function refreshTop(){ $("#as_preview").innerHTML=avatarHTML(ME,96); $("#as_coins").textContent=getCoins(ME); }
+  function swatchRow(title, items, current, onPick){
+    const wrap=document.createElement("div"); wrap.className="card"; wrap.style.marginBottom="12px";
+    wrap.innerHTML=`<div style="font-weight:800;font-size:14px;margin-bottom:10px">${title}</div>`;
+    const grid=document.createElement("div"); grid.style.cssText="display:flex;flex-wrap:wrap;gap:10px";
+    items.forEach(val=>{
+      const sel=current===val; const s=document.createElement("button");
+      s.style.cssText=`width:40px;height:40px;border-radius:50%;cursor:pointer;background:${val};border:3px solid ${sel?"#fff":"var(--line)"};box-shadow:${sel?"0 0 0 2px var(--orange)":"none"}`;
+      s.onclick=()=>onPick(val); grid.appendChild(s);
+    });
+    wrap.appendChild(grid); return wrap;
+  }
   function draw(){
-    refreshPreview();
-    const grid=$("#as_grid"); grid.innerHTML="";
-    const cfg=getAvatar(ME);
-    SHOP.filter(it=>it.slot===slot).forEach(it=>{
-      const owned=isOwned(ME,it);
-      const equipped = (cfg[slot]||"")===it.val || (slot==="base"&&!cfg.base&&it.val===ME.avatar);
-      const locked = lvl<it.level && !owned;
-      const swatch = slot==="bg"
-        ? `<div style="width:40px;height:40px;border-radius:50%;margin:0 auto;background:${it.val};border:2px solid var(--line)"></div>`
-        : `<div style="font-size:34px">${it.val||"🚫"}</div>`;
-      let status, cls="";
-      if(equipped){ status='<span style="color:var(--green);font-weight:700">Equipped ✓</span>'; cls="border-color:var(--green)"; }
+    refreshTop();
+    const panel=$("#as_panel"); panel.innerHTML="";
+    const cfg=getCfg(ME);
+    if(tab==="looks"){
+      panel.appendChild(swatchRow("Skin tone", SKIN_TONES.map(s=>s.val), cfg.skin, async v=>{ await setCfg(ME,{skin:v}); draw(); }));
+      panel.appendChild(swatchRow("Hair color", HAIR_COLORS, cfg.hairColor, async v=>{ await setCfg(ME,{hairColor:v}); draw(); }));
+      panel.appendChild(swatchRow("Outfit color", OUTFIT_COLORS, cfg.outfitColor, async v=>{ await setCfg(ME,{outfitColor:v}); draw(); }));
+      const tip=document.createElement("p"); tip.className="muted center"; tip.style.fontSize="12px";
+      tip.textContent="Skin tone & colors are free — make your buddy look like you. 🎨";
+      panel.appendChild(tip); return;
+    }
+    const grid=document.createElement("div"); grid.className="grid"; grid.style.gridTemplateColumns="repeat(3,1fr)";
+    SHOP.filter(it=>it.slot===tab).forEach(it=>{
+      const owned=isOwned(ME,it), equipped=cfg[tab]===it.opt, locked=lvl<it.level && !owned;
+      const preview=avatarSVG(Object.assign({},cfg,{[tab]:it.opt}),54);
+      let status, border="";
+      if(equipped){ status='<span style="color:var(--green);font-weight:700">Equipped ✓</span>'; border="border-color:var(--green)"; }
       else if(owned){ status='<span style="color:var(--teal);font-weight:700">Equip</span>'; }
       else if(locked){ status='🔒 Lvl '+it.level; }
       else { status='🪙 '+it.cost; }
-      const card=document.createElement("button"); card.className="badge"; card.style.cssText="cursor:pointer;"+cls;
-      card.innerHTML=`${swatch}<div class="n">${esc(it.name)}</div><div class="muted" style="font-size:11px">${status}</div>`;
+      const card=document.createElement("button"); card.className="badge"; card.style.cssText="cursor:pointer;gap:6px;"+border;
+      card.innerHTML=`<div style="width:54px;height:54px;border-radius:50%;overflow:hidden;line-height:0">${preview}</div>
+        <div class="n">${esc(it.name)}</div><div class="muted" style="font-size:11px">${status}</div>`;
       card.onclick=async()=>{
         if(equipped) return;
-        if(owned){ const c=Object.assign({},getAvatar(ME)); c[slot]=it.val; await avSave(ME,{cfg:c}); draw(); return; }
+        if(owned){ await setCfg(ME,{[tab]:it.opt}); draw(); return; }
         if(locked){ toast("Reach level "+it.level+" to unlock"); return; }
         if(getCoins(ME)<it.cost){ toast("Need "+(it.cost-getCoins(ME))+" more coins"); return; }
         if(!confirm("Buy “"+it.name+"” for "+it.cost+" coins?")) return;
         const own=getOwned(ME).slice(); own.push(it.id);
-        const c=Object.assign({},getAvatar(ME)); c[slot]=it.val;
+        const c=Object.assign({}, rawCfg(ME), {[tab]:it.opt});
         await avSave(ME,{coins:getCoins(ME)-it.cost, owned:own, cfg:c});
         toast("Unlocked "+it.name+"! 🎉"); draw();
       };
       grid.appendChild(card);
     });
+    panel.appendChild(grid);
   }
-  draw();
+  markTabs(); draw();
   $("#as_back").onclick=()=>go("profile");
 }
 
@@ -1273,15 +1482,19 @@ async function renderLeaderboard(){
 async function renderBadges(){
   const logs=await DB.getLogs().catch(()=>[]);
   const s=statsFrom(ME,logs);
+  const award=await awardBadgeCoins(s);            // backfill any unpaid achievements
+  if(award.total>0) toast(`+${award.total} 🪙 from achievements!`);
+  const coined=getCoined(ME);
   const earned=BADGES.filter(b=>b.test(s)).length;
   app().innerHTML=`
    <div class="fade">
     <div class="topbar"><div class="logo"><span class="dot"></span>Badges</div>
       <span class="pill">${earned}/${BADGES.length}</span></div>
     <div class="card" style="margin-bottom:16px">
-      <div class="row between"><div style="font-weight:800;font-size:17px">${esc(ME.name)}'s achievements</div></div>
+      <div class="row between"><div style="font-weight:800;font-size:17px">${esc(ME.name)}'s achievements</div>
+        <span class="chip">🪙 ${getCoins(ME)}</span></div>
       <div class="bar" style="margin-top:10px"><i style="width:${Math.round(earned/BADGES.length*100)}%"></i></div>
-      <div class="muted" style="font-size:12px;margin-top:6px">${earned} unlocked · keep going to collect them all</div>
+      <div class="muted" style="font-size:12px;margin-top:6px">${earned} unlocked · each one pays a coin bonus</div>
     </div>
     <div class="grid" style="grid-template-columns:repeat(3,1fr)" id="bg"></div>
    </div>`;
@@ -1289,7 +1502,10 @@ async function renderBadges(){
   BADGES.forEach(b=>{
     const has=b.test(s);
     const d=document.createElement("div"); d.className="badge"+(has?"":" locked");
-    d.innerHTML=`<div class="e">${has?b.e:"🔒"}</div><div class="n">${b.n}</div><div class="muted" style="font-size:10px">${b.d}</div>`;
+    const reward = has
+      ? `<div style="font-size:10px;font-weight:700;color:var(--amber)">${coined.includes(b.id)?"✓ ":""}+${b.coins} 🪙</div>`
+      : `<div class="muted" style="font-size:10px">🪙 ${b.coins}</div>`;
+    d.innerHTML=`<div class="e">${has?b.e:"🔒"}</div><div class="n">${b.n}</div><div class="muted" style="font-size:10px">${b.d}</div>${reward}`;
     g.appendChild(d);
   });
 }
@@ -1297,8 +1513,10 @@ let _knownBadges=null;
 async function checkNewBadges(){
   const logs=await DB.getLogs().catch(()=>[]);
   const s=statsFrom(ME,logs);
+  const res=await awardBadgeCoins(s);   // pay one-time coin lump sums
   const now=BADGES.filter(b=>b.test(s)).map(b=>b.id);
-  if(_knownBadges){ const fresh=now.filter(id=>!_knownBadges.includes(id));
+  if(res.fresh.length){ const b=res.fresh[0]; toast(`${b.e} ${b.n} unlocked! +${res.total} 🪙`); }
+  else if(_knownBadges){ const fresh=now.filter(id=>!_knownBadges.includes(id));
     if(fresh.length){ const b=BADGES.find(x=>x.id===fresh[0]); toast(`${b.e} Badge unlocked: ${b.n}!`); } }
   _knownBadges=now;
 }

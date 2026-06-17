@@ -35,9 +35,12 @@ That's it — from then on profiles and progress save to the cloud automatically
 
 **Gamification.** Earn XP per set + completion and perfect-workout bonuses, level up, build daily streaks, unlock 10 badges, and chase a weekly challenge. The **Squad** tab ranks everyone by all-time XP, current streak, or workouts this week.
 
+**Avatar & coins.** Every person gets a cute, calm drawn character (a single layered SVG buddy — not an emoji). Workouts pay **coins** (harder sessions pay more) and every achievement you unlock pays a one-time coin **lump sum** on top. Spend coins in the **Avatar Studio** to dress your buddy up: skin tone and hair/outfit colors are always free (so anyone can make it look like them), while hairstyles, glasses, clothes, hats, extras (headphones, backpack, coffee, scarf, earbuds), companion pets, and background scenes are bought with coins and **unlock as you level up**. Everyone starts with a minimal basic look and builds from there.
+
 ## Customizing
 
 - **Add exercises:** add an entry to the `EXERCISES` array in `index.html`.
 - **Add routines:** add to the `TEMPLATES` array (list exercise ids for warm/main/cool).
 - **Tune intensity:** edit `AGE_GROUPS` (sets, rep multiplier, rest seconds, impact).
-- **Badges & challenge:** edit the `BADGES` array and `weeklyChallenge()`.
+- **Badges & rewards:** edit the `BADGES` array — each badge's `coins` field is its one-time achievement payout. Tune `weeklyChallenge()` for the weekly goal.
+- **Avatar items:** add to the `SHOP` array (`slot`, `opt` style key, `cost`, `level`). Each `slot` (`hair`, `glasses`, `outfit`, `hat`, `accessory`, `pet`, `bg`) is drawn by the matching `part…()` / `outfitDetail()` / `bgScene()` function in the avatar section — add a `case` there for any new `opt`. Free color palettes live in `SKIN_TONES`, `HAIR_COLORS`, and `OUTFIT_COLORS`.
