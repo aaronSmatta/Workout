@@ -22,6 +22,9 @@ create table if not exists public.profiles (
 -- Safe to re-run on an existing database to add the rest-preference columns:
 alter table public.profiles add column if not exists rest_set integer;
 alter table public.profiles add column if not exists rest_ex  integer;
+-- Saved custom workouts + home-page layout (order / hidden):
+alter table public.profiles add column if not exists custom_workouts jsonb;
+alter table public.profiles add column if not exists home_prefs      jsonb;
 
 -- ---------- WORKOUT LOGS --------------------------------------------
 create table if not exists public.workout_logs (
