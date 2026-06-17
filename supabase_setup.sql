@@ -43,22 +43,60 @@ create table if not exists public.workout_logs (
 create index if not exists workout_logs_profile_idx on public.workout_logs(profile_id);
 create index if not exists workout_logs_date_idx on public.workout_logs(date);
 
+-- ---------- SHARED COMMUNITY EXERCISE LIBRARY ----------------------
+create table if not exists public.custom_exercises (
+  id          text primary key,
+  name        text not null,
+  part        text not null,
+  emoji       text default '💪',
+  base        integer not null default 10,
+  unit        text not null default 'reps',   -- reps | sec
+  impact      integer not null default 2,
+  tip         text,
+  created_by  text,
+  created_at  timestamptz not null default now()
+);
+
+-- ---------- SHARED COMMUNITY WORKOUT PLANS ------------------------
+create table if not exists public.shared_workouts (
+  id          text primary key,
+  name        text not null,
+  emoji       text default '🛠️',
+  color       text default '#4d7cff',
+  descr       text,
+  warm        jsonb,
+  main        jsonb,
+  cool        jsonb,
+  created_by  text,
+  created_at  timestamptz not null default now()
+);
+
 -- ---------- ROW LEVEL SECURITY --------------------------------------
 -- This is a friends/family community app: everyone can see everyone for
 -- accountability, and write with the public anon key. If you later add
 -- Supabase Auth, tighten these policies.
 alter table public.profiles enable row level security;
 alter table public.workout_logs enable row level security;
+alter table public.custom_exercises enable row level security;
+alter table public.shared_workouts enable row level security;
 
 drop policy if exists "open read profiles"  on public.profiles;
 drop policy if exists "open write profiles" on public.profiles;
 drop policy if exists "open read logs"       on public.workout_logs;
 drop policy if exists "open write logs"      on public.workout_logs;
+drop policy if exists "open read cex"        on public.custom_exercises;
+drop policy if exists "open write cex"       on public.custom_exercises;
+drop policy if exists "open read sw"         on public.shared_workouts;
+drop policy if exists "open write sw"        on public.shared_workouts;
 
 create policy "open read profiles"  on public.profiles      for select using (true);
 create policy "open write profiles" on public.profiles      for all    using (true) with check (true);
 create policy "open read logs"      on public.workout_logs  for select using (true);
 create policy "open write logs"     on public.workout_logs  for all    using (true) with check (true);
+create policy "open read cex"       on public.custom_exercises for select using (true);
+create policy "open write cex"      on public.custom_exercises for all    using (true) with check (true);
+create policy "open read sw"        on public.shared_workouts  for select using (true);
+create policy "open write sw"       on public.shared_workouts  for all    using (true) with check (true);
 
 -- Done. Copy your Project URL and anon public key from
 -- Project Settings > API. The app (运动 Challenge) connects automatically.

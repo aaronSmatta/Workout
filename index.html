@@ -164,7 +164,12 @@ const EXERCISES = [
   {id:"hamstr",   name:"Hamstring Stretch",   part:"Mobility", emoji:"🤸", base:30, unit:"sec", impact:1, tip:"Sit or stand and reach gently toward your toes. Feel a light stretch — don't bounce."},
   {id:"shoulder", name:"Shoulder Rolls",      part:"Mobility", emoji:"💆", base:25, unit:"sec", impact:1, tip:"Roll your shoulders up, back, and down in slow circles."},
 ];
-const byId = id => EXERCISES.find(e=>e.id===id);
+// Community-created exercises (loaded from the cloud) live here and are
+// merged with the built-in list everywhere via allEx()/byId().
+let CUSTOM_EX = [];
+const allEx = () => EXERCISES.concat(CUSTOM_EX);
+const byId = id => allEx().find(e=>e.id===id);
+const EX_PARTS = ["Push","Pull","Legs","Core","Cardio","Mobility","Other"];
 
 /* ---------- WORKOUT TEMPLATES (kept under ~60 min after scaling) ---------- */
 const TEMPLATES = [
@@ -275,6 +280,28 @@ const DB = {
   async deleteLog(id){
     if(isCloud()){ const {error}=await sb.from('workout_logs').delete().eq('id',id); if(error) throw error; return; }
     const d=lget(); d.logs=d.logs.filter(l=>l.id!==id); lset(d);
+  },
+  /* ---- shared community exercise library ---- */
+  async getCustomExercises(){
+    if(isCloud()){ const {data,error}=await sb.from('custom_exercises').select('*').order('created_at',{ascending:true}); if(error) throw error; return data||[]; }
+    try{ return JSON.parse(localStorage.getItem('fitcircle_cex')||'[]'); }catch(e){ return []; }
+  },
+  async addCustomExercise(ex){
+    if(isCloud()){ const {data,error}=await sb.from('custom_exercises').insert(ex).select().single(); if(error) throw error; return data; }
+    ex.created_at=new Date().toISOString(); const a=JSON.parse(localStorage.getItem('fitcircle_cex')||'[]'); a.push(ex); localStorage.setItem('fitcircle_cex',JSON.stringify(a)); return ex;
+  },
+  async deleteCustomExercise(id){
+    if(isCloud()){ const {error}=await sb.from('custom_exercises').delete().eq('id',id); if(error) throw error; return; }
+    const a=JSON.parse(localStorage.getItem('fitcircle_cex')||'[]').filter(e=>e.id!==id); localStorage.setItem('fitcircle_cex',JSON.stringify(a));
+  },
+  /* ---- shared community workout plans ---- */
+  async getSharedWorkouts(){
+    if(isCloud()){ const {data,error}=await sb.from('shared_workouts').select('*').order('created_at',{ascending:false}); if(error) throw error; return data||[]; }
+    try{ return JSON.parse(localStorage.getItem('fitcircle_sw')||'[]'); }catch(e){ return []; }
+  },
+  async addSharedWorkout(wk){
+    if(isCloud()){ const {data,error}=await sb.from('shared_workouts').insert(wk).select().single(); if(error) throw error; return data; }
+    wk.created_at=new Date().toISOString(); const a=JSON.parse(localStorage.getItem('fitcircle_sw')||'[]'); a.unshift(wk); localStorage.setItem('fitcircle_sw',JSON.stringify(a)); return wk;
   }
 };
 
@@ -425,8 +452,10 @@ function statsFrom(profile, logs){
 /* ============================================================
    RENDER ROUTER
    ============================================================ */
+async function loadCustomEx(){ CUSTOM_EX = await DB.getCustomExercises().catch(()=>[]); }
 async function boot(){
   initSB();
+  await loadCustomEx();
   // restore me
   const savedMe=localStorage.getItem(ME_KEY);
   try{ PROFILES=await DB.getProfiles(); }catch(e){ PROFILES=[]; }
@@ -562,6 +591,7 @@ async function renderHome(){
       <button class="btn sm alt" id="editHome" style="padding:6px 12px">✏️ Edit</button></div>
     <div class="grid" id="tpls"></div>
     <button class="btn alt" style="margin-top:14px" id="customBtn">🛠️ Build a custom workout</button>
+    <button class="btn alt" style="margin-top:10px" id="communityBtn">🌐 Browse squad workouts</button>
 
     ${mine.length?`<h3 style="margin:22px 2px 10px">Recent activity</h3><div class="grid" id="recent"></div>`:''}
    </div>`;
@@ -581,7 +611,8 @@ async function renderHome(){
     b.onclick=()=>startWorkout(w);
     tpls.appendChild(b);
   });
-  $("#customBtn").onclick=renderCustomBuilder;
+  $("#customBtn").onclick=()=>renderCustomBuilder();
+  $("#communityBtn").onclick=renderCommunity;
   $("#editHome").onclick=renderOrganize;
   $("#meav").onclick=()=>go("profile");
   if(mine.length){
@@ -618,10 +649,11 @@ async function refreshStreak(logs){
 }
 
 /* ---------- CUSTOM WORKOUT BUILDER ---------- */
-async function renderCustomBuilder(){
+async function renderCustomBuilder(preselect){
   await loadPRs();   // so custom workouts also progress from your last results
-  const chosen=new Set();
-  const parts=[...new Set(EXERCISES.map(e=>e.part))];
+  await loadCustomEx();
+  const chosen=new Set(preselect||[]);
+  const parts=[...new Set(allEx().map(e=>e.part))].sort((a,b)=>EX_PARTS.indexOf(a)-EX_PARTS.indexOf(b));
   const colors=["#4d7cff","#ff6b35","#1fd4b4","#9b6bff","#34d399","#ffb02e","#ff4d6d"];
   let pickColor=colors[0];
   app().innerHTML=`
@@ -633,6 +665,8 @@ async function renderCustomBuilder(){
       <div class="field" style="margin-bottom:10px"><label>Workout name</label><input id="cb_name" placeholder="e.g. Morning Mix" maxlength="28"/></div>
       <label>Tile color</label><div class="row" style="flex-wrap:wrap;gap:10px" id="cb_col"></div>
     </div>
+    <button class="btn teal sm" id="cb_newex" style="width:100%;margin-bottom:6px">➕ Create a new exercise</button>
+    <p class="muted" style="font-size:11px;margin:0 2px 4px">Exercises you create are shared with everyone in your squad. 🌐</p>
     <div id="cb_parts"></div>
     <div style="height:128px"></div>
    </div>
@@ -648,17 +682,27 @@ async function renderCustomBuilder(){
   const wrap=$("#cb_parts");
   parts.forEach(part=>{
     const h=document.createElement("div"); h.className="exhead"; h.style.margin="14px 2px 8px"; h.textContent=part; wrap.appendChild(h);
-    EXERCISES.filter(e=>e.part===part).forEach(e=>{
-      const row=document.createElement("button"); row.className="ex-pick";
-      row.innerHTML=`<span style="font-size:20px">${e.emoji}</span><div style="flex:1;text-align:left">
-        <div style="font-weight:700;font-size:14px">${e.name}</div>
-        <span class="tag">${e.base} ${e.unit} base</span></div><span class="check"></span>`;
-      row.onclick=()=>{ if(chosen.has(e.id)){chosen.delete(e.id);row.classList.remove("on");row.querySelector(".check").textContent="";}
+    allEx().filter(e=>e.part===part).forEach(e=>{
+      const mine = CUSTOM_EX.some(c=>c.id===e.id);
+      const row=document.createElement("div"); row.className="ex-pick"+(chosen.has(e.id)?" on":"");
+      row.innerHTML=`<span style="font-size:20px">${e.emoji||"💪"}</span><div style="flex:1;text-align:left">
+        <div style="font-weight:700;font-size:14px">${esc(e.name)}${mine?' <span class="tag" style="color:var(--teal)">community</span>':''}</div>
+        <span class="tag">${e.base} ${e.unit} base</span></div>
+        ${mine?'<button class="cb_delex" title="Delete this community exercise" style="background:none;color:var(--muted);font-size:14px;padding:4px">🗑</button>':''}
+        <span class="check">${chosen.has(e.id)?"✓":""}</span>`;
+      const pick=()=>{ if(chosen.has(e.id)){chosen.delete(e.id);row.classList.remove("on");row.querySelector(".check").textContent="";}
         else{chosen.add(e.id);row.classList.add("on");row.querySelector(".check").textContent="✓";}
         $("#cb_n").textContent=chosen.size; };
+      row.onclick=pick;
+      const dx=row.querySelector(".cb_delex");
+      if(dx) dx.onclick=async(ev)=>{ ev.stopPropagation();
+        if(!confirm("Delete the community exercise “"+e.name+"” for everyone?")) return;
+        try{ await DB.deleteCustomExercise(e.id); chosen.delete(e.id); await loadCustomEx(); renderCustomBuilder([...chosen]); }catch(err){ alert("Could not delete: "+err.message); } };
       wrap.appendChild(row);
     });
   });
+  $("#cb_n").textContent=chosen.size;
+  $("#cb_newex").onclick=()=>renderNewExercise([...chosen]);
   $("#cb_back").onclick=()=>go("home");
   function buildTpl(){
     if(!chosen.size){ toast("Pick at least one exercise"); return null; }
@@ -672,6 +716,45 @@ async function renderCustomBuilder(){
   }
   $("#cb_save").onclick=async()=>{ const tpl=buildTpl(); if(!tpl) return; await persist(tpl); toast("Saved to home 🎉"); go("home"); };
   $("#cb_start").onclick=async()=>{ const tpl=buildTpl(); if(!tpl) return; await persist(tpl); startWorkout(buildWorkout(tpl,ME.age_group)); };
+}
+
+/* ---------- CREATE A NEW (SHARED) EXERCISE ---------- */
+function renderNewExercise(preselect){
+  let unit="reps", part="Push", emoji="💪";
+  const emojis=["💪","🔥","⚡","🏋️","🦵","🧘","🤸","🏃","🚴","🤾","🧗","🙆","🦿","🌀"];
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>New exercise</div>
+      <button class="btn sm alt" id="nx_back">Back</button></div>
+    <p class="muted" style="margin:0 0 12px">Create an exercise once — it's shared with everyone in your squad and can be added to any workout. 🌐</p>
+    <div class="card">
+      <div class="field"><label>Exercise name</label><input id="nx_name" placeholder="e.g. Cossack Squat" maxlength="36"/></div>
+      <div class="field"><label>Body part</label><select id="nx_part"></select></div>
+      <div class="field"><label>Measured in</label>
+        <div class="seg" id="nx_unit"><button class="on" data-u="reps">Reps</button><button data-u="sec">Seconds (hold)</button></div></div>
+      <div class="field"><label>Default amount (<span id="nx_ul">reps</span> per set)</label><input id="nx_base" type="number" min="1" max="300" value="10"/></div>
+      <div class="field"><label>Pick an icon</label><div class="row" style="flex-wrap:wrap;gap:8px" id="nx_emoji"></div></div>
+      <div class="field"><label>How to do it (simple instructions)</label>
+        <input id="nx_tip" placeholder="e.g. Step wide, sink to one side, keep the other leg straight." maxlength="160"/></div>
+      <button class="btn teal" id="nx_save">Create &amp; share exercise</button>
+      <button class="btn alt" id="nx_cancel" style="margin-top:10px">Cancel</button>
+    </div>
+   </div>`;
+  const ps=$("#nx_part"); EX_PARTS.forEach(p=>{const o=document.createElement("option");o.value=p;o.textContent=p;if(p==="Push")o.selected=true;ps.appendChild(o);}); ps.onchange=()=>part=ps.value;
+  $("#nx_unit").querySelectorAll("button").forEach(b=>b.onclick=()=>{ unit=b.dataset.u; $("#nx_unit").querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); $("#nx_ul").textContent=unit==="sec"?"seconds":"reps"; });
+  const eg=$("#nx_emoji"); emojis.forEach((e,i)=>{const s=document.createElement("button");s.className="avatar";s.style.cssText="width:38px;height:38px;font-size:19px";s.textContent=e;if(i===0)s.style.borderColor="var(--teal)";
+    s.onclick=()=>{emoji=e;[...eg.children].forEach(x=>x.style.borderColor="var(--line)");s.style.borderColor="var(--teal)";};eg.appendChild(s);});
+  const goBack=()=>renderCustomBuilder(preselect);
+  $("#nx_back").onclick=goBack; $("#nx_cancel").onclick=goBack;
+  $("#nx_save").onclick=async()=>{
+    const name=$("#nx_name").value.trim(); const base=Math.max(1,Math.min(300,parseInt($("#nx_base").value)||10));
+    if(!name){ toast("Give your exercise a name"); return; }
+    const ex={id:"ux-"+Date.now().toString(36), name, part, emoji, base, unit, impact:2,
+      tip:$("#nx_tip").value.trim(), created_by:ME.name};
+    const btn=$("#nx_save"); btn.textContent="Saving…"; btn.disabled=true;
+    try{ await DB.addCustomExercise(ex); await loadCustomEx(); toast("Exercise shared! 🎉"); renderCustomBuilder([...(preselect||[]), ex.id]); }
+    catch(e){ alert("Could not save: "+e.message); btn.textContent="Create & share exercise"; btn.disabled=false; }
+  };
 }
 
 /* ---------- ORGANIZE HOME PAGE (reorder / hide / delete) ---------- */
@@ -700,11 +783,17 @@ async function renderOrganize(){
           <button class="og-up btn sm alt" style="padding:6px 9px" ${i===0?"disabled":""}>▲</button>
           <button class="og-dn btn sm alt" style="padding:6px 9px" ${i===order.length-1?"disabled":""}>▼</button>
           <button class="og-eye btn sm alt" style="padding:6px 9px">${isHidden?"🙈":"👁"}</button>
+          ${custom?'<button class="og-share btn sm alt" style="padding:6px 9px" title="Share with squad">📤</button>':""}
           ${custom?'<button class="og-del btn sm alt" style="padding:6px 9px;color:var(--coral)">🗑</button>':""}
         </div>`;
       row.querySelector(".og-up").onclick=async()=>{ if(i>0){ [order[i-1],order[i]]=[order[i],order[i-1]]; await persist(); draw(); } };
       row.querySelector(".og-dn").onclick=async()=>{ if(i<order.length-1){ [order[i+1],order[i]]=[order[i],order[i+1]]; await persist(); draw(); } };
       row.querySelector(".og-eye").onclick=async()=>{ if(hidden.has(k)) hidden.delete(k); else hidden.add(k); await persist(); draw(); };
+      const sh=row.querySelector(".og-share");
+      if(sh) sh.onclick=async()=>{ if(!confirm("Share “"+t.name+"” with your whole squad?")) return;
+        sh.textContent="…";
+        try{ await DB.addSharedWorkout({id:"sw-"+Date.now().toString(36), name:t.name, emoji:t.emoji, color:t.color, descr:t.desc||"", main:t.main, warm:t.warm||["march"], cool:t.cool||["hamstr"], created_by:ME.name}); toast("Shared with the squad 🌐"); }
+        catch(e){ alert("Could not share: "+e.message); } draw(); };
       const del=row.querySelector(".og-del");
       if(del) del.onclick=async()=>{ if(!confirm("Delete the custom workout “"+t.name+"”?")) return;
         const arr=getCustoms(ME).filter(c=>c.id!==k); await saveCustoms(ME,arr);
@@ -715,6 +804,45 @@ async function renderOrganize(){
   }
   draw();
   $("#og_done").onclick=()=>go("home");
+}
+
+/* ---------- COMMUNITY: browse & import shared workouts ---------- */
+async function renderCommunity(){
+  await loadCustomEx();
+  const shared=await DB.getSharedWorkouts().catch(()=>[]);
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>Squad workouts</div>
+      <button class="btn sm alt" id="cm_back">Back</button></div>
+    <p class="muted" style="margin:0 0 14px">Workouts shared by your squad. Add one to your home page or try it now. 🌐</p>
+    <div id="cm_list"></div>
+   </div>`;
+  $("#cm_back").onclick=()=>go("home");
+  const list=$("#cm_list");
+  if(!shared.length){ list.innerHTML=`<div class="card center muted">No shared workouts yet. Build a custom workout, then tap 📤 in ✏️ Edit to share it.</div>`; return; }
+  shared.forEach(s=>{
+    const exNames=(s.main||[]).map(id=>(byId(id)||{}).name).filter(Boolean);
+    const tpl={id:s.id, name:s.name, emoji:s.emoji||"🛠️", color:s.color||"#4d7cff", desc:s.descr||"", warm:s.warm||["march"], main:s.main||[], cool:s.cool||["hamstr"]};
+    const mins=estMinutes(buildWorkout(tpl,ME.age_group));
+    const d=document.createElement("div"); d.className="card"; d.style.marginBottom="10px";
+    d.innerHTML=`<div class="row" style="gap:12px">
+        <div class="wico" style="background:${tpl.color}22;color:${tpl.color}">${tpl.emoji}</div>
+        <div style="flex:1"><div style="font-weight:800">${esc(s.name)}</div>
+          <div class="muted" style="font-size:12px">by ${esc(s.created_by||"squad")} · ${exNames.length} exercises · ⏱️ ${mins}m</div></div></div>
+      <div class="muted" style="font-size:12px;margin:8px 0 10px">${esc(exNames.slice(0,6).join(", "))}${exNames.length>6?"…":""}</div>
+      <div class="row" style="gap:8px">
+        <button class="btn sm cm_add" style="flex:1">➕ Add to home</button>
+        <button class="btn sm alt cm_try" style="flex:1">▶ Try now</button>
+      </div>`;
+    d.querySelector(".cm_add").onclick=async()=>{
+      const copy={id:"cw-"+Date.now().toString(36), name:s.name, emoji:tpl.emoji, color:tpl.color, desc:(tpl.main.length)+" exercises · shared", warm:tpl.warm, main:tpl.main, cool:tpl.cool};
+      const arr=getCustoms(ME); arr.push(copy); await saveCustoms(ME,arr);
+      const prefs=getHomePrefs(ME); prefs.order.push(copy.id); await saveHomePrefs(ME,prefs);
+      toast("Added to your home 🎉");
+    };
+    d.querySelector(".cm_try").onclick=()=>startWorkout(buildWorkout(tpl,ME.age_group));
+    list.appendChild(d);
+  });
 }
 
 /* ============================================================
