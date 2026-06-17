@@ -14,8 +14,14 @@ create table if not exists public.profiles (
   streak        integer not null default 0,
   best_streak   integer not null default 0,
   last_workout  date,
+  rest_set      integer,                  -- optional custom rest between sets (sec)
+  rest_ex       integer,                  -- optional custom rest between exercises (sec)
   created_at    timestamptz not null default now()
 );
+
+-- Safe to re-run on an existing database to add the rest-preference columns:
+alter table public.profiles add column if not exists rest_set integer;
+alter table public.profiles add column if not exists rest_ex  integer;
 
 -- ---------- WORKOUT LOGS --------------------------------------------
 create table if not exists public.workout_logs (
