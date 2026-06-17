@@ -377,6 +377,7 @@ const SKIN_TONES=[
 ];
 const HAIR_COLORS=["#2b2b35","#4a3526","#6f4e37","#8d5a3c","#b5651d","#d9a441","#9aa0a6","#e9e3da","#ff9ebb","#7aa9ff"];
 const OUTFIT_COLORS=["#4d7cff","#ff6b35","#ff4d6d","#1fd4b4","#34d399","#9b6bff","#ffb02e","#5b6472","#f4f4f4","#2b2b35"];
+const GENDERS=[{id:"neutral",label:"Neutral"},{id:"female",label:"Female"},{id:"male",label:"Male"}];
 
 // Shop slots (buyable, level-gated). opt = style key the SVG reads.
 const SHOP=[
@@ -441,7 +442,7 @@ const SHOP_SLOTS=[
 ];
 const shopItem=id=>SHOP.find(s=>s.id===id);
 const optsFor=slot=>SHOP.filter(s=>s.slot===slot).map(s=>s.opt);
-const AV_DEFAULT={skin:"#eeb086",hair:"short",hairColor:"#2b2b35",glasses:"none",
+const AV_DEFAULT={skin:"#eeb086",gender:"neutral",hair:"short",hairColor:"#2b2b35",glasses:"none",
   outfit:"tee",outfitColor:"#4d7cff",hat:"none",accessory:"none",pet:"none",bg:"mint"};
 
 function avKey(id){ return "fitcircle_av_"+id; }   // {coins, owned:[], cfg:{}}
@@ -461,6 +462,7 @@ function getCoined(p){ const c=rawCfg(p); return Array.isArray(c._coined)?c._coi
 function getCfg(p){
   const c=rawCfg(p), out=Object.assign({},AV_DEFAULT);
   if(SKIN_TONES.some(s=>s.val===c.skin)) out.skin=c.skin;
+  if(GENDERS.some(g=>g.id===c.gender)) out.gender=c.gender;
   if(HAIR_COLORS.includes(c.hairColor)) out.hairColor=c.hairColor;
   if(OUTFIT_COLORS.includes(c.outfitColor)) out.outfitColor=c.outfitColor;
   ["hair","glasses","outfit","hat","accessory","pet","bg"].forEach(sl=>{ if(optsFor(sl).includes(c[sl])) out[sl]=c[sl]; });
@@ -558,7 +560,14 @@ function partPet(opt){
     bird:`<circle r="8" fill="#7ec4e8"/><circle cx="-2.5" cy="-1" r="1.2" fill="#3a3340"/><circle cx="2.5" cy="-1" r="1.2" fill="#3a3340"/><path d="M0,2 L4,4 L0,5 Z" fill="#ffcf3f"/>`,
     panda:`<circle r="9" fill="#fff"/><circle cx="-8" cy="-7" r="3" fill="#2b2b33"/><circle cx="8" cy="-7" r="3" fill="#2b2b33"/><ellipse cx="-3" cy="-1" rx="2.4" ry="3" fill="#2b2b33"/><ellipse cx="3" cy="-1" rx="2.4" ry="3" fill="#2b2b33"/><circle cx="-3" cy="-1" r="1" fill="#fff"/><circle cx="3" cy="-1" r="1" fill="#fff"/>`
   };
-  return `<g transform="translate(19,85)">${faces[opt]||""}</g>`;
+  // sits in the lower-left, in FRONT of the body, fully inside the round crop
+  return `<g transform="translate(28,80)">${faces[opt]||""}</g>`;
+}
+/* shoulders/bust shape varies by selected gender */
+function bodyPath(gender){
+  if(gender==="male")   return "M9,100 L9,89 C9,73 27,67 50,67 C73,67 91,73 91,89 L91,100 Z";
+  if(gender==="female") return "M19,100 L19,91 C19,79 33,71 50,71 C67,71 81,79 81,91 L81,100 Z";
+  return "M14,100 L14,90 C14,76 30,69 50,69 C70,69 86,76 86,90 L86,100 Z"; // neutral
 }
 function bgScene(opt,u){
   const solid={mint:"#cfeee4",sky:"#d3e8ff",peach:"#ffe0d2",lavender:"#e6dcff"};
@@ -579,10 +588,9 @@ function avatarSVG(cfg,size){
   return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">`
     +`<defs>${bg.def}</defs>`
     +bg.rect
-    +partPet(cfg.pet)
     +partHairBack(cfg.hair,hc)
     +`<rect x="44" y="58" width="12" height="14" rx="5" fill="${sc}"/>`
-    +`<path d="M14,100 L14,90 C14,76 30,69 50,69 C70,69 86,76 86,90 L86,100 Z" fill="${oc}"/>`
+    +`<path d="${bodyPath(cfg.gender)}" fill="${oc}"/>`
     +outfitDetail(cfg.outfit)
     +acc.body
     +`<ellipse cx="29" cy="47" rx="5" ry="6" fill="${sc}"/>`
@@ -593,11 +601,13 @@ function avatarSVG(cfg,size){
     +`<ellipse cx="42" cy="46" rx="2.6" ry="3.2" fill="#3a3340"/>`
     +`<ellipse cx="58" cy="46" rx="2.6" ry="3.2" fill="#3a3340"/>`
     +`<circle cx="43" cy="45" r="0.9" fill="#fff"/><circle cx="59" cy="45" r="0.9" fill="#fff"/>`
+    +(cfg.gender==="female"?`<path d="M39,44 l-2.6,-1.4 M41.4,42.8 l-1.4,-2.2 M61,44 l2.6,-1.4 M58.6,42.8 l1.4,-2.2" stroke="#3a3340" stroke-width="1" fill="none" stroke-linecap="round"/>`:"")
     +`<path d="M46,54 Q50,58 54,54" fill="none" stroke="#c4675f" stroke-width="1.6" stroke-linecap="round"/>`
     +partHairFront(cfg.hair,hc)
     +partGlasses(cfg.glasses)
     +acc.earL+acc.earR+acc.band
     +partHat(cfg.hat)
+    +partPet(cfg.pet)
     +acc.front
     +`</svg>`;
 }
@@ -776,7 +786,7 @@ function renderProfiles(){
 }
 
 function renderNewProfile(){
-  let sel={skin:SKIN_TONES[2].val, hairColor:"#2b2b35", color:"#ff6b35", age:"adult"};
+  let sel={skin:SKIN_TONES[2].val, gender:"neutral", hairColor:"#2b2b35", color:"#ff6b35", age:"adult"};
   const colors=["#ff6b35","#ff4d6d","#1fd4b4","#4d7cff","#9b6bff","#34d399","#ffb02e"];
   app().innerHTML=`
    <div class="fade">
@@ -784,6 +794,7 @@ function renderNewProfile(){
     <div class="card">
       <div class="center" style="margin-bottom:6px"><div id="np_prev" style="display:flex;justify-content:center"></div></div>
       <div class="field"><label>Your name</label><input id="np_name" placeholder="e.g. Mei" maxlength="20"/></div>
+      <div class="field"><label>Gender</label><div class="row" style="gap:8px" id="np_gender"></div></div>
       <div class="field"><label>Skin tone</label><div class="row" style="flex-wrap:wrap;gap:8px" id="np_skin"></div></div>
       <div class="field"><label>Hair color</label><div class="row" style="flex-wrap:wrap;gap:8px" id="np_hair"></div></div>
       <div class="field"><label>Accent color</label><div class="row" style="flex-wrap:wrap;gap:10px" id="np_col"></div></div>
@@ -794,12 +805,18 @@ function renderNewProfile(){
       <p class="muted center" style="font-size:12px;margin-top:10px">Unlock hairstyles, glasses, clothes &amp; more in the Avatar Studio. ✨</p>
     </div>
    </div>`;
-  function prev(){ $("#np_prev").innerHTML=avatarHTML({avatar_cfg:{skin:sel.skin,hairColor:sel.hairColor,hair:"short",outfit:"tee",outfitColor:sel.color,bg:"mint",glasses:"none",hat:"none",accessory:"none",pet:"none"}},90); }
+  function prev(){ $("#np_prev").innerHTML=avatarHTML({avatar_cfg:{skin:sel.skin,gender:sel.gender,hairColor:sel.hairColor,hair:"short",outfit:"tee",outfitColor:sel.color,bg:"mint",glasses:"none",hat:"none",accessory:"none",pet:"none"}},90); }
   function picker(box, items, getVal, isSel, onPick){
     items.forEach(it=>{ const v=getVal(it); const s=document.createElement("button");
       s.style.cssText=`width:34px;height:34px;border-radius:50%;background:${v};border:3px solid ${isSel(v)?"#fff":"transparent"};cursor:pointer`;
       s.onclick=()=>{ onPick(v); [...box.children].forEach(x=>x.style.borderColor="transparent"); s.style.borderColor="#fff"; prev(); }; box.appendChild(s); });
   }
+  const gbox=$("#np_gender");
+  GENDERS.forEach(o=>{ const b=document.createElement("button"); b.className="chip"; b.textContent=o.label;
+    const paint=on=>{ b.style.cssText="cursor:pointer;flex:1 0 auto;"+(on?"background:var(--grad);color:#fff;border-color:transparent":""); };
+    paint(o.id===sel.gender);
+    b.onclick=()=>{ sel.gender=o.id; [...gbox.children].forEach(x=>x.style.cssText="cursor:pointer;flex:1 0 auto;"); paint(true); prev(); };
+    gbox.appendChild(b); });
   picker($("#np_skin"), SKIN_TONES, t=>t.val, v=>v===sel.skin, v=>sel.skin=v);
   picker($("#np_hair"), HAIR_COLORS, c=>c, v=>v===sel.hairColor, v=>sel.hairColor=v);
   picker($("#np_col"),  colors,      c=>c, v=>v===sel.color, v=>sel.color=v);
@@ -815,7 +832,7 @@ function renderNewProfile(){
     try{
       const p=await DB.createProfile({name,age_group:sel.age,avatar:"🙂",color:sel.color});
       PROFILES=await DB.getProfiles(); ME=PROFILES.find(x=>x.id===p.id)||p;
-      await avSave(ME,{cfg:{skin:sel.skin,hairColor:sel.hairColor,
+      await avSave(ME,{cfg:{skin:sel.skin,gender:sel.gender,hairColor:sel.hairColor,
         outfitColor:OUTFIT_COLORS.includes(sel.color)?sel.color:"#4d7cff",
         hair:"short",outfit:"tee",bg:"mint",glasses:"none",hat:"none",accessory:"none",pet:"none"}});
       localStorage.setItem(ME_KEY,ME.id); toast("Welcome, "+name+"! 🎉"); showApp();
@@ -1173,11 +1190,24 @@ function renderAvatarStudio(){
     });
     wrap.appendChild(grid); return wrap;
   }
+  function chipRow(title, options, current, onPick){
+    const wrap=document.createElement("div"); wrap.className="card"; wrap.style.marginBottom="12px";
+    wrap.innerHTML=`<div style="font-weight:800;font-size:14px;margin-bottom:10px">${title}</div>`;
+    const row=document.createElement("div"); row.style.cssText="display:flex;gap:8px;flex-wrap:wrap";
+    options.forEach(o=>{
+      const sel=current===o.id; const b=document.createElement("button");
+      b.className="chip"; b.textContent=o.label; b.style.cssText="cursor:pointer;flex:1 0 auto;"
+        +(sel?"background:var(--grad);color:#fff;border-color:transparent":"");
+      b.onclick=()=>onPick(o.id); row.appendChild(b);
+    });
+    wrap.appendChild(row); return wrap;
+  }
   function draw(){
     refreshTop();
     const panel=$("#as_panel"); panel.innerHTML="";
     const cfg=getCfg(ME);
     if(tab==="looks"){
+      panel.appendChild(chipRow("Gender", GENDERS, cfg.gender, async v=>{ await setCfg(ME,{gender:v}); draw(); }));
       panel.appendChild(swatchRow("Skin tone", SKIN_TONES.map(s=>s.val), cfg.skin, async v=>{ await setCfg(ME,{skin:v}); draw(); }));
       panel.appendChild(swatchRow("Hair color", HAIR_COLORS, cfg.hairColor, async v=>{ await setCfg(ME,{hairColor:v}); draw(); }));
       panel.appendChild(swatchRow("Outfit color", OUTFIT_COLORS, cfg.outfitColor, async v=>{ await setCfg(ME,{outfitColor:v}); draw(); }));
