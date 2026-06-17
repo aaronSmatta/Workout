@@ -277,8 +277,37 @@ const DB = {
 /* ============================================================
    APP STATE + HELPERS
    ============================================================ */
-let ME=null, PROFILES=[], TAB="home", SESSION=null, WORKOUT_CLOCK=null;
+let ME=null, PROFILES=[], TAB="home", SESSION=null, WORKOUT_CLOCK=null, FINISHING=false, MYPR={};
 function fmtClock(ms){ const s=Math.max(0,Math.floor(ms/1000)); const m=Math.floor(s/60); return m+":"+String(s%60).padStart(2,"0"); }
+
+/* ---- Rest-time preferences (per profile). Stored on the profile in the
+   cloud when those columns exist, and mirrored to localStorage so it works
+   instantly and offline. Falls back to the age-group default. ---- */
+function restKey(id){ return "fitcircle_rest_"+id; }
+function getRestPref(id){ try{ return JSON.parse(localStorage.getItem(restKey(id))||"null"); }catch(e){ return null; } }
+function setRestPref(id,setS,exS){ localStorage.setItem(restKey(id),JSON.stringify({set:setS,ex:exS})); }
+function effectiveRest(p){
+  const ag=AGE_GROUPS[p.age_group]||AGE_GROUPS.adult, pref=getRestPref(p.id);
+  const setR = Number.isFinite(p.rest_set) ? p.rest_set : (pref? pref.set : ag.restSet);
+  const exR  = Number.isFinite(p.rest_ex)  ? p.rest_ex  : (pref? pref.ex  : ag.restEx);
+  return {set:setR, ex:exR};
+}
+
+/* ---- Progression: most-recent achieved reps/seconds per exercise ---- */
+function computePRs(logs){
+  const map={};
+  const mine=logs.filter(l=>l.profile_id===ME.id)
+    .sort((a,b)=> (a.created_at||"")<(b.created_at||"")?1:-1); // newest first
+  for(const l of mine){
+    const ex=l.details && l.details.ex;
+    if(!Array.isArray(ex)) continue;
+    for(const r of ex){ if(!map[r.id] && r.best>0) map[r.id]={best:r.best, unit:r.unit}; }
+  }
+  return map;
+}
+async function loadPRs(){ const logs=await DB.getLogs(ME.id).catch(()=>[]); MYPR=computePRs(logs); return MYPR; }
+const CHALLENGE_STEP=ex=>ex.unit==="sec"?5:2;   // extra on the challenge set
+const PROGRESS_STEP=ex=>ex.unit==="sec"?5:1;    // steady week-over-week bump
 const app=()=>document.getElementById("app");
 const $=(s,r=document)=>r.querySelector(s);
 const esc=s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -286,26 +315,44 @@ function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("sh
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
 
-/* build a scaled, runnable workout from a template + age group */
+/* build a scaled, runnable workout from a template + age group.
+   Main exercises progress from your last result and the final set is a
+   "challenge set" with a few extra reps/seconds so it's never the same. */
 function buildWorkout(tpl, ageKey){
   const ag=AGE_GROUPS[ageKey];
+  const rest=ME?effectiveRest(ME):{set:ag.restSet, ex:ag.restEx};
   const sect=(ids,role)=> ids
     .map(byId).filter(Boolean)
     // skip very high-impact moves for low-impact groups
     .filter(e=> !(ag.impact===1 && e.impact===3 && role==="main"))
     .map(e=>{
       const sets = role==="warm"||role==="cool" ? 1 : ag.sets;
-      let target = Math.max(e.unit==="sec"?10:4, Math.round(e.base*(role==="main"?ag.repMul:0.9)));
-      return {ex:e, sets, target, unit:e.unit, restSet:ag.restSet, role};
+      const scaled = Math.max(e.unit==="sec"?10:4, Math.round(e.base*(role==="main"?ag.repMul:0.9)));
+      let base=scaled, lastBest=null;
+      if(role==="main"){
+        const pr=MYPR[e.id];
+        if(pr && pr.best>0){
+          lastBest=pr.best;
+          const cap=Math.round(e.base*ag.repMul*1.8);       // keep workouts under ~1 hour
+          base=Math.min(cap, pr.best + PROGRESS_STEP(e));   // beat your last result
+        }
+      }
+      // per-set targets; the last main set gets a challenge bump
+      const targets=[];
+      for(let i=0;i<sets;i++){
+        const challenge = role==="main" && sets>1 && i===sets-1;
+        targets.push(challenge ? base + CHALLENGE_STEP(e) : base);
+      }
+      return {ex:e, sets, baseTarget:base, targets, unit:e.unit, restSet:rest.set, role, lastBest};
     });
   const warm=sect(tpl.warm,"warm"), main=sect(tpl.main,"main"), cool=sect(tpl.cool,"cool");
-  return {tpl, ageKey, warm, main, cool, restEx:ag.restEx};
+  return {tpl, ageKey, warm, main, cool, restEx:rest.ex};
 }
 function estMinutes(w){
   let sec=0;
   [...w.warm,...w.main,...w.cool].forEach(it=>{
-    const work=(it.unit==="sec"?it.target:it.target*3); // ~3s per rep
-    sec += it.sets*work + (it.sets-1)*it.restSet + w.restEx;
+    it.targets.forEach(t=>{ sec += (it.unit==="sec"? t : t*3); }); // ~3s per rep
+    sec += (it.sets-1)*it.restSet + w.restEx;
   });
   return Math.max(8, Math.round(sec/60));
 }
@@ -420,6 +467,7 @@ async function renderHome(){
   const ag=AGE_GROUPS[ME.age_group]||AGE_GROUPS.adult;
   const logs=await DB.getLogs();
   await refreshStreak(logs);
+  MYPR=computePRs(logs);   // so today's targets reflect your last results
   const mine=logs.filter(l=>l.profile_id===ME.id);
   const lvl=levelFor(ME.xp), nextXP=xpForLevel(lvl+1), curBase=xpForLevel(lvl);
   const prog=Math.min(100,Math.round((ME.xp-curBase)/(nextXP-curBase)*100));
@@ -495,7 +543,8 @@ async function refreshStreak(logs){
 }
 
 /* ---------- CUSTOM WORKOUT BUILDER ---------- */
-function renderCustomBuilder(){
+async function renderCustomBuilder(){
+  await loadPRs();   // so custom workouts also progress from your last results
   const chosen=new Set();
   const parts=[...new Set(EXERCISES.map(e=>e.part))];
   app().innerHTML=`
@@ -537,8 +586,9 @@ function renderCustomBuilder(){
    ============================================================ */
 function startWorkout(w){
   const items=[...w.warm,...w.main,...w.cool].map(it=>({...it,
-    done:Array(it.sets).fill(false), reps:Array(it.sets).fill(it.target)}));
+    done:Array(it.sets).fill(false), reps:it.targets.slice()}));
   SESSION={w, items, idx:0, startTs:Date.now()};
+  FINISHING=false;
   renderRunner();
 }
 function totalSets(){ return SESSION.items.reduce((a,it)=>a+it.sets,0); }
@@ -571,7 +621,8 @@ function renderRunner(){
       <div style="font-size:60px;margin:8px 0">${e.emoji}</div>
       <h2 style="font-size:22px">${e.name}</h2>
       <div class="muted" style="margin-top:6px">${it.sets} set${it.sets>1?"s":""} ·
-        ${it.target} ${isTimed?"sec hold":"reps"} target · ${it.restSet}s rest</div>
+        ${it.baseTarget} ${isTimed?"sec hold":"reps"} · ${it.restSet}s rest</div>
+      ${it.lastBest!=null?`<div class="pill" style="margin-top:10px;color:var(--teal)">📈 Last time ${it.lastBest} → today ${it.baseTarget} (+${PROGRESS_STEP(e)} ${isTimed?"sec":"rep"})</div>`:(it.role==="main"?`<div class="pill" style="margin-top:10px">🎯 First time — set your baseline</div>`:"")}
     </div>
 
     <div class="card" style="margin-bottom:16px;background:var(--card2);border-color:var(--line)">
@@ -586,11 +637,14 @@ function renderRunner(){
    </div>`;
   const sw=$("#rn_sets");
   for(let i=0;i<it.sets;i++){
+    const tgt=it.targets[i];
+    const isChallenge = it.role==="main" && it.sets>1 && i===it.sets-1;
     const row=document.createElement("div"); row.className="setrow"+(it.done[i]?" done":"");
     const startBtn = isTimed && !it.done[i]
-      ? `<button class="btn sm teal rn_start" style="padding:8px 12px">▶ ${it.target}s</button>` : "";
+      ? `<button class="btn sm teal rn_start" style="padding:8px 12px">▶ ${tgt}s</button>` : "";
     row.innerHTML=`<button class="check">${it.done[i]?"✓":""}</button>
-      <div style="flex:1"><span style="font-weight:700">Set ${i+1}</span></div>
+      <div style="flex:1"><span style="font-weight:700">Set ${i+1}</span>
+        ${isChallenge?` <span class="tag" style="background:#ff4d6d33;color:#ff7a93">🔥 challenge ${tgt}</span>`:` <span class="muted" style="font-size:12px">goal ${tgt}</span>`}</div>
       ${startBtn}
       <input class="repedit" type="number" min="0" value="${it.reps[i]}" />
       <span class="muted" style="font-size:13px;width:34px">${isTimed?"sec":"reps"}</span>`;
@@ -602,7 +656,7 @@ function renderRunner(){
       if(it.done[i] && i<it.sets-1){ startRest(it.restSet,"Rest before set "+(i+2)); }
     };
     const sb=row.querySelector(".rn_start");
-    if(sb) sb.onclick=()=>startTimer(it.target, e, "Set "+(i+1)+" of "+it.sets, (secsDone)=>{ it.reps[i]=secsDone; markDone(); });
+    if(sb) sb.onclick=()=>startTimer(tgt, e, "Set "+(i+1)+" of "+it.sets, (secsDone)=>{ it.reps[i]=secsDone; markDone(); });
     sw.appendChild(row);
   }
   startClock();
@@ -611,7 +665,7 @@ function renderRunner(){
     if(s.idx<s.items.length-1){
       s.idx++; const restMsg="Up next: "+s.items[s.idx].ex.name;
       startRest(s.w.restEx, restMsg, renderRunner);
-    } else { stopClock(); finishWorkout(); }
+    } else { const b=$("#rn_next"); b.disabled=true; b.textContent="Saving…"; stopClock(); finishWorkout(); }
   };
 }
 
@@ -660,6 +714,8 @@ function startRest(sec, msg, after){
 }
 
 async function finishWorkout(){
+  if(FINISHING || !SESSION) return;   // guard against double-tap / re-entry
+  FINISHING=true;
   const s=SESSION, tot=totalSets(), done=doneSets();
   const mins=Math.max(1,Math.round((Date.now()-s.startTs)/60000));
   // XP: 10 per completed set + completion bonus, weekly bonus handled separately
@@ -667,7 +723,12 @@ async function finishWorkout(){
   const perfect = done===tot;
   if(perfect) xp+=40;
   const early = new Date().getHours()<8;
-  const details={early, perfect, parts:[...new Set(s.items.map(i=>i.ex.part))]};
+  // per-exercise best result (for progression next time)
+  const exResults=s.items.filter(it=>it.role==="main").map(it=>{
+    const doneReps=it.reps.filter((r,idx)=>it.done[idx]);
+    return {id:it.ex.id, name:it.ex.name, unit:it.unit, best:doneReps.length?Math.max(...doneReps):0};
+  }).filter(r=>r.best>0);
+  const details={early, perfect, parts:[...new Set(s.items.map(i=>i.ex.part))], ex:exResults};
   // streak
   let streak=ME.streak||0, best=ME.best_streak||0;
   if(ME.last_workout!==todayStr()){
@@ -686,7 +747,8 @@ async function finishWorkout(){
   ME.xp=newXP; ME.streak=streak; ME.best_streak=best; ME.last_workout=todayStr();
   PROFILES=await DB.getProfiles().catch(()=>PROFILES);
   ME=PROFILES.find(p=>p.id===ME.id)||ME;
-  SESSION=null;
+  await loadPRs();           // refresh progression for next time
+  SESSION=null; FINISHING=false;
   renderSummary({xp,mins,done,tot,perfect,streak});
 }
 
@@ -812,6 +874,7 @@ async function checkNewBadges(){
 async function renderProfile(){
   const ag=AGE_GROUPS[ME.age_group]||AGE_GROUPS.adult;
   const logs=await DB.getLogs(ME.id).catch(()=>[]);
+  const rest=effectiveRest(ME);
   app().innerHTML=`
    <div class="fade">
     <div class="topbar"><div class="logo"><span class="dot"></span>Profile</div>
@@ -822,8 +885,31 @@ async function renderProfile(){
       <div class="muted">Level ${levelFor(ME.xp)} · ${ME.xp} XP · 🔥 ${ME.streak}</div>
       <div class="field" style="margin-top:16px;text-align:left"><label>Age group (changes intensity & rest)</label>
         <select id="pf_age"></select></div>
-      <div class="muted" style="font-size:12px;text-align:left">${ag.emoji} ${ag.note} — ${ag.sets} sets · ${ag.restSet}s set rest · ${ag.restEx}s between exercises</div>
+      <div class="muted" style="font-size:12px;text-align:left">${ag.emoji} ${ag.note} — ${ag.sets} sets · default ${ag.restSet}s set rest · ${ag.restEx}s between exercises</div>
     </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="exhead" style="color:var(--teal)">⏱️ Your rest times</div>
+      <p class="muted" style="font-size:12px;margin:6px 0 12px">Tune rest to your level — shorter for more challenge, longer to recover.</p>
+      <div class="row between" style="margin-bottom:12px">
+        <div><div style="font-weight:700">Between sets</div><div class="muted" style="font-size:12px">within an exercise</div></div>
+        <div class="row" style="gap:8px">
+          <button class="btn sm alt stp" id="rs_minus">−</button>
+          <span id="rs_val" style="font-weight:800;min-width:54px;text-align:center">${rest.set}s</span>
+          <button class="btn sm alt stp" id="rs_plus">＋</button>
+        </div>
+      </div>
+      <div class="row between">
+        <div><div style="font-weight:700">Between exercises</div><div class="muted" style="font-size:12px">moving to the next move</div></div>
+        <div class="row" style="gap:8px">
+          <button class="btn sm alt stp" id="re_minus">−</button>
+          <span id="re_val" style="font-weight:800;min-width:54px;text-align:center">${rest.ex}s</span>
+          <button class="btn sm alt stp" id="re_plus">＋</button>
+        </div>
+      </div>
+      <button class="btn alt sm" id="rs_reset" style="width:100%;margin-top:14px">↺ Reset to age default (${ag.restSet}s / ${ag.restEx}s)</button>
+    </div>
+
     <button class="btn alt" id="pf_switch" style="margin-bottom:10px">🔄 Switch profile</button>
     <button class="btn alt" id="pf_del" style="margin-bottom:10px;color:var(--coral)">🗑️ Delete this profile</button>
     <p class="muted center" style="font-size:12px;margin-top:8px">${logs.length} workouts logged · best streak ${ME.best_streak} · ☁️ auto-synced</p>
@@ -831,6 +917,23 @@ async function renderProfile(){
   const sel=$("#pf_age");
   Object.entries(AGE_GROUPS).forEach(([k,g])=>{const o=document.createElement("option");o.value=k;o.textContent=`${g.emoji} ${g.label} (${g.sub})`;if(k===ME.age_group)o.selected=true;sel.appendChild(o);});
   sel.onchange=async()=>{ ME.age_group=sel.value; await DB.updateProfile(ME.id,{age_group:sel.value}); toast("Intensity updated"); go("profile"); };
+  // rest-time steppers
+  let rSet=rest.set, rEx=rest.ex;
+  const clamp=v=>Math.max(10,Math.min(180,v));
+  const saveRest=async()=>{
+    rSet=clamp(rSet); rEx=clamp(rEx);
+    ME.rest_set=rSet; ME.rest_ex=rEx;
+    setRestPref(ME.id,rSet,rEx);                                  // instant + offline cache
+    try{ await DB.updateProfile(ME.id,{rest_set:rSet,rest_ex:rEx}); }catch(e){ /* columns optional */ }
+    $("#rs_val").textContent=rSet+"s"; $("#re_val").textContent=rEx+"s";
+  };
+  $("#rs_minus").onclick=()=>{ rSet-=5; saveRest(); };
+  $("#rs_plus").onclick =()=>{ rSet+=5; saveRest(); };
+  $("#re_minus").onclick=()=>{ rEx-=5; saveRest(); };
+  $("#re_plus").onclick =()=>{ rEx+=5; saveRest(); };
+  $("#rs_reset").onclick=async()=>{ localStorage.removeItem(restKey(ME.id)); delete ME.rest_set; delete ME.rest_ex;
+    try{ await DB.updateProfile(ME.id,{rest_set:null,rest_ex:null}); }catch(e){}
+    toast("Rest reset to age default"); go("profile"); };
   $("#pf_switch").onclick=()=>{ localStorage.removeItem(ME_KEY); ME=null; $("#nav").classList.add("hidden"); renderProfiles(); };
   $("#pf_del").onclick=async()=>{ if(confirm("Delete "+ME.name+"'s profile and all their logs?")){ await DB.deleteProfile(ME.id); localStorage.removeItem(ME_KEY); ME=null; PROFILES=await DB.getProfiles().catch(()=>[]); $("#nav").classList.add("hidden"); renderProfiles(); } };
 }
