@@ -1623,7 +1623,14 @@ async function renderProfile(){
       <span class="pill">☁️ Synced</span></div>
     <div class="card center" style="margin-bottom:16px">
       <div style="display:flex;justify-content:center;margin:0 auto 10px">${avatarHTML(ME,84)}</div>
-      <h2>${esc(ME.name)}</h2>
+      <h2 id="pf_namedisp">${esc(ME.name)} <button id="pf_editname" title="Edit name" style="background:none;border:none;font-size:15px;cursor:pointer;opacity:.65;vertical-align:middle">✏️</button></h2>
+      <div id="pf_nameedit" class="hidden" style="max-width:280px;margin:8px auto 0">
+        <input id="pf_nameinput" maxlength="20" value="${esc(ME.name)}" style="text-align:center"/>
+        <div class="row" style="gap:8px;margin-top:8px;justify-content:center">
+          <button class="btn sm" id="pf_namesave" style="width:auto">Save</button>
+          <button class="btn sm alt" id="pf_namecancel" style="width:auto">Cancel</button>
+        </div>
+      </div>
       <div class="muted">Level ${levelFor(ME.xp)} · ${ME.xp} XP · 🔥 ${ME.streak} · 🪙 ${getCoins(ME)}</div>
       <button class="btn teal sm" id="pf_avatar" style="margin-top:12px">🎨 Customize avatar &amp; shop</button>
       <div class="field" style="margin-top:16px;text-align:left"><label>Age group (changes intensity & rest)</label>
@@ -1678,6 +1685,23 @@ async function renderProfile(){
     try{ await DB.updateProfile(ME.id,{rest_set:null,rest_ex:null}); }catch(e){}
     toast("Rest reset to age default"); go("profile"); };
   $("#pf_avatar").onclick=renderAvatarStudio;
+  // edit profile name (inline)
+  const nameDisp=$("#pf_namedisp"), nameEdit=$("#pf_nameedit"), nameInput=$("#pf_nameinput");
+  $("#pf_editname").onclick=()=>{ nameDisp.classList.add("hidden"); nameEdit.classList.remove("hidden"); nameInput.value=ME.name; nameInput.focus(); nameInput.select(); };
+  $("#pf_namecancel").onclick=()=>{ nameEdit.classList.add("hidden"); nameDisp.classList.remove("hidden"); };
+  $("#pf_namesave").onclick=async()=>{
+    const newName=nameInput.value.trim();
+    if(!newName){ toast("Name can't be empty"); return; }
+    if(newName===ME.name){ nameEdit.classList.add("hidden"); nameDisp.classList.remove("hidden"); return; }
+    const btn=$("#pf_namesave"); btn.textContent="Saving…"; btn.disabled=true;
+    try{
+      await DB.updateProfile(ME.id,{name:newName});
+      ME.name=newName;
+      const p=PROFILES.find(x=>x.id===ME.id); if(p) p.name=newName;
+      toast("Name updated ✏️"); go("profile");
+    }catch(e){ alert("Could not update name: "+e.message); btn.textContent="Save"; btn.disabled=false; }
+  };
+  nameInput.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); $("#pf_namesave").click(); } if(e.key==="Escape"){ $("#pf_namecancel").click(); } };
   $("#pf_switch").onclick=()=>{ localStorage.removeItem(ME_KEY); ME=null; $("#nav").classList.add("hidden"); renderProfiles(); };
   $("#pf_del").onclick=async()=>{ if(confirm("Delete "+ME.name+"'s profile and all their logs?")){ await DB.deleteProfile(ME.id); localStorage.removeItem(ME_KEY); ME=null; PROFILES=await DB.getProfiles().catch(()=>[]); $("#nav").classList.add("hidden"); renderProfiles(); } };
 }
