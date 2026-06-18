@@ -168,6 +168,26 @@ const EXERCISES = [
   {id:"hamstr",   name:"Hamstring Stretch",   part:"Mobility", emoji:"🤸", base:30, unit:"sec", impact:1, tip:"Sit or stand and reach gently toward your toes. Feel a light stretch — don't bounce."},
   {id:"shoulder", name:"Shoulder Rolls",      part:"Mobility", emoji:"💆", base:25, unit:"sec", impact:1, tip:"Roll your shoulders up, back, and down in slow circles."},
 ];
+
+/* ---------- BABY MODE ----------
+   Moves that are safe & doable while holding a baby: standing, stable, no
+   jumping and no hands-on-the-floor. Holding a baby adds load, so baby-mode
+   sets count as harder (more XP & coins) and reps scale down a little. */
+const BABY_MOVES={
+  dbpress:  ["Baby Press","Hold your baby securely at your chest, then gently press them up toward the sky and lower slowly. Smile up at them!"],
+  squat:    [null,"Hold your baby close to your chest like a goblet squat. Sit back as if to a chair, then stand tall."],
+  lunge:    [null,"Hold your baby snug to your chest. Step one foot back, lower gently, then push back up. Go slow for balance."],
+  calf:     [null,"Hold your baby close and rise onto your tiptoes, then lower slowly with control."],
+  wallsit:  [null,"Back against the wall, slide down to a seated hold with your baby resting on your lap."],
+  march:    [null,"March gently in place holding your baby, lifting your knees with control."],
+  hipcircle:[null,"Hold your baby close and sway your hips in slow, easy circles."],
+  shoulder: [null,"Hold your baby comfortably and roll your shoulders up, back, and down."]
+};
+EXERCISES.forEach(e=>{ const b=BABY_MOVES[e.id]; if(b){ e.baby=true; if(b[0]) e.babyName=b[0]; e.babyTip=b[1]; } });
+const isBabyFriendly=e=>!!(e&&e.baby);
+// fallback pools so a baby-mode workout is never empty after filtering
+const BABY_FALLBACK={warm:["march","shoulder","hipcircle"], main:["squat","lunge","wallsit","calf","dbpress"], cool:["shoulder","hipcircle"]};
+
 // Community-created exercises (loaded from the cloud) live here and are
 // merged with the built-in list everywhere via allEx()/byId().
 let CUSTOM_EX = [];
@@ -675,38 +695,57 @@ function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("sh
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
 
+/* ---- Baby mode preference (per profile, stored locally) ---- */
+function babyKey(id){ return "fitcircle_baby_"+id; }
+function getBaby(p){ p=p||ME; if(!p) return false; try{ return localStorage.getItem(babyKey(p.id))==="1"; }catch(e){ return false; } }
+function setBaby(p, on){ try{ localStorage.setItem(babyKey(p.id), on?"1":"0"); }catch(e){} }
+
 /* build a scaled, runnable workout from a template + age group.
    Main exercises progress from your last result and the final set is a
-   "challenge set" with a few extra reps/seconds so it's never the same. */
+   "challenge set" with a few extra reps/seconds so it's never the same.
+   In baby mode, only baby-friendly moves are used and reps scale down a
+   little because holding a baby makes every rep harder. */
 function buildWorkout(tpl, ageKey){
   const ag=AGE_GROUPS[ageKey];
+  const baby=getBaby(ME);
   const rest=ME?effectiveRest(ME):{set:ag.restSet, ex:ag.restEx};
+  const mk=(e,role)=>{
+    const sets = role==="warm"||role==="cool" ? 1 : ag.sets;
+    const scaled = Math.max(e.unit==="sec"?10:4, Math.round(e.base*(role==="main"?ag.repMul:0.9)));
+    let base=scaled, lastBest=null;
+    if(role==="main"){
+      const pr=MYPR[e.id];
+      if(pr && pr.best>0){
+        lastBest=pr.best;
+        const cap=Math.round(e.base*ag.repMul*1.8);       // keep workouts under ~1 hour
+        base=Math.min(cap, pr.best + PROGRESS_STEP(e));   // beat your last result
+      }
+    }
+    if(baby) base=Math.max(e.unit==="sec"?10:4, Math.round(base*0.9)); // added load → fewer, harder reps
+    // per-set targets; the last main set gets a challenge bump
+    const targets=[];
+    for(let i=0;i<sets;i++){
+      const challenge = role==="main" && sets>1 && i===sets-1;
+      targets.push(challenge ? base + CHALLENGE_STEP(e) : base);
+    }
+    return {ex:e, sets, baseTarget:base, targets, unit:e.unit, restSet:rest.set, role, lastBest, baby};
+  };
   const sect=(ids,role)=> ids
     .map(byId).filter(Boolean)
     // skip very high-impact moves for low-impact groups
     .filter(e=> !(ag.impact===1 && e.impact===3 && role==="main"))
-    .map(e=>{
-      const sets = role==="warm"||role==="cool" ? 1 : ag.sets;
-      const scaled = Math.max(e.unit==="sec"?10:4, Math.round(e.base*(role==="main"?ag.repMul:0.9)));
-      let base=scaled, lastBest=null;
-      if(role==="main"){
-        const pr=MYPR[e.id];
-        if(pr && pr.best>0){
-          lastBest=pr.best;
-          const cap=Math.round(e.base*ag.repMul*1.8);       // keep workouts under ~1 hour
-          base=Math.min(cap, pr.best + PROGRESS_STEP(e));   // beat your last result
-        }
-      }
-      // per-set targets; the last main set gets a challenge bump
-      const targets=[];
-      for(let i=0;i<sets;i++){
-        const challenge = role==="main" && sets>1 && i===sets-1;
-        targets.push(challenge ? base + CHALLENGE_STEP(e) : base);
-      }
-      return {ex:e, sets, baseTarget:base, targets, unit:e.unit, restSet:rest.set, role, lastBest};
-    });
-  const warm=sect(tpl.warm,"warm"), main=sect(tpl.main,"main"), cool=sect(tpl.cool,"cool");
-  return {tpl, ageKey, warm, main, cool, restEx:rest.ex};
+    // in baby mode, keep only moves you can do holding a baby
+    .filter(e=> !baby || isBabyFriendly(e))
+    .map(e=>mk(e,role));
+  let warm=sect(tpl.warm,"warm"), main=sect(tpl.main,"main"), cool=sect(tpl.cool,"cool");
+  if(baby){
+    // make sure filtering never leaves an empty/too-short workout
+    const have=new Set(main.map(it=>it.ex.id));
+    for(const id of BABY_FALLBACK.main){ if(main.length>=4) break; if(!have.has(id)){ const e=byId(id); if(e){ main.push(mk(e,"main")); have.add(id); } } }
+    if(!warm.length) warm=BABY_FALLBACK.warm.map(byId).filter(Boolean).map(e=>mk(e,"warm"));
+    if(!cool.length) cool=BABY_FALLBACK.cool.map(byId).filter(Boolean).map(e=>mk(e,"cool"));
+  }
+  return {tpl, ageKey, baby, warm, main, cool, restEx:rest.ex};
 }
 function estMinutes(w){
   let sec=0;
@@ -850,6 +889,7 @@ async function renderHome(){
   const lvl=levelFor(ME.xp), nextXP=xpForLevel(lvl+1), curBase=xpForLevel(lvl);
   const prog=Math.min(100,Math.round((ME.xp-curBase)/(nextXP-curBase)*100));
   const ch=weeklyChallenge(mine);
+  const baby=getBaby(ME);
   app().innerHTML=`
    <div class="fade">
     <div class="topbar">
@@ -883,6 +923,18 @@ async function renderHome(){
       <div class="muted" style="font-size:12px;margin-top:6px">${ch.cur}/${ch.goal} · +${ch.reward} XP bonus</div>
     </div>
 
+    <div class="card" id="babyToggle" style="margin-bottom:14px;cursor:pointer;border-color:${baby?'var(--coral)':'var(--line)'}">
+      <div class="row between">
+        <div style="flex:1;padding-right:12px">
+          <div style="font-weight:800">👶 Baby mode ${baby?'<span class="tag" style="background:#ff4d6d33;color:#ff7a93">ON</span>':''}</div>
+          <div class="muted" style="font-size:12px;margin-top:3px">Workout while holding your little one — standing moves only, and the extra load earns bonus XP &amp; coins.</div>
+        </div>
+        <div style="width:48px;height:28px;border-radius:999px;background:${baby?'var(--coral)':'var(--line)'};position:relative;flex-shrink:0;transition:background .2s">
+          <div style="position:absolute;top:3px;left:${baby?'23px':'3px'};width:22px;height:22px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="row between" style="margin:4px 2px 10px"><h3>Today's workout</h3>
       <button class="btn sm alt" id="editHome" style="padding:6px 12px">✏️ Edit</button></div>
     <div class="grid" id="tpls"></div>
@@ -901,8 +953,8 @@ async function renderHome(){
     const w=buildWorkout(t,ME.age_group); const mins=estMinutes(w);
     const b=document.createElement("button"); b.className="wtile";
     b.innerHTML=`<div class="wico" style="background:${t.color}22;color:${t.color}">${t.emoji}</div>
-      <div style="flex:1"><div style="font-weight:800;font-size:16px">${esc(t.name)}${isCustomKey(t.id)?' <span class="tag">custom</span>':''}</div>
-      <div class="muted" style="font-size:13px">${esc(t.desc||"")}</div></div>
+      <div style="flex:1"><div style="font-weight:800;font-size:16px">${esc(t.name)}${isCustomKey(t.id)?' <span class="tag">custom</span>':''}${baby?' <span class="tag" style="background:#ff4d6d33;color:#ff7a93">👶 baby</span>':''}</div>
+      <div class="muted" style="font-size:13px">${baby?"Adapted to do while holding your baby":esc(t.desc||"")}</div></div>
       <span class="pill">⏱️ ${mins}m</span>`;
     b.onclick=()=>startWorkout(w);
     tpls.appendChild(b);
@@ -912,6 +964,7 @@ async function renderHome(){
   $("#editHome").onclick=renderOrganize;
   $("#meav").onclick=()=>go("profile");
   $("#homeShop").onclick=renderAvatarStudio;
+  $("#babyToggle").onclick=()=>{ setBaby(ME,!baby); toast(!baby?"👶 Baby mode on — workouts adapted":"Baby mode off"); renderHome(); };
   if(mine.length){
     const r=$("#recent");
     mine.slice(0,5).forEach(l=>{
@@ -1268,6 +1321,9 @@ function stopClock(){ clearInterval(WORKOUT_CLOCK); WORKOUT_CLOCK=null; }
 function renderRunner(){
   $("#nav").classList.add("hidden");
   const s=SESSION, it=s.items[s.idx], e=it.ex;
+  const baby=!!s.w.baby;
+  const exName=baby&&e.babyName?e.babyName:e.name;
+  const tipText=baby&&e.babyTip?e.babyTip:(e.tip||"");
   const roleLabel={warm:"Warm-up",main:"Workout",cool:"Cool-down"}[it.role];
   const tot=totalSets(), done=doneSets(), pct=Math.round(done/tot*100);
   const isTimed=it.unit==="sec";
@@ -1283,16 +1339,17 @@ function renderRunner(){
 
     <div class="card" style="text-align:center;margin-bottom:14px">
       <div class="exhead">${roleLabel}</div>
-      <div style="font-size:60px;margin:8px 0">${e.emoji}</div>
-      <h2 style="font-size:22px">${e.name}</h2>
+      <div style="font-size:60px;margin:8px 0">${e.emoji}${baby?" 👶":""}</div>
+      <h2 style="font-size:22px">${exName}</h2>
       <div class="muted" style="margin-top:6px">${it.sets} set${it.sets>1?"s":""} ·
         ${it.baseTarget} ${isTimed?"sec hold":"reps"} · ${it.restSet}s rest</div>
+      ${baby?`<div class="pill" style="margin-top:10px;color:var(--coral)">👶 Holding baby — counts as harder, earns more</div>`:""}
       ${it.lastBest!=null?`<div class="pill" style="margin-top:10px;color:var(--teal)">📈 Last time ${it.lastBest} → today ${it.baseTarget} (+${PROGRESS_STEP(e)} ${isTimed?"sec":"rep"})</div>`:(it.role==="main"?`<div class="pill" style="margin-top:10px">🎯 First time — set your baseline</div>`:"")}
     </div>
 
     <div class="card" style="margin-bottom:16px;background:var(--card2);border-color:var(--line)">
       <div class="exhead" style="color:var(--teal)">📖 How to do it</div>
-      <div style="margin-top:6px;line-height:1.5">${esc(e.tip||"")}</div>
+      <div style="margin-top:6px;line-height:1.5">${esc(tipText)}</div>
     </div>
 
     <div class="exhead" style="margin:0 2px 10px">Sets — ${isTimed?"tap ▶ to start the timer, or check off":"check off or edit if you fell short"}</div>
@@ -1382,22 +1439,25 @@ async function finishWorkout(){
   if(FINISHING || !SESSION) return;   // guard against double-tap / re-entry
   FINISHING=true;
   const s=SESSION, tot=totalSets(), done=doneSets();
+  const baby=!!s.w.baby;
   const mins=Math.max(1,Math.round((Date.now()-s.startTs)/60000));
   // XP: 10 per completed set + completion bonus, weekly bonus handled separately
   let xp=done*10 + 30;
   const perfect = done===tot;
   if(perfect) xp+=40;
+  if(baby) xp+=done*5;        // holding a baby is harder — extra XP per set
   const early = new Date().getHours()<8;
-  // coins: harder exercises (higher impact) pay more per completed set
+  // coins: harder exercises (higher impact) pay more per completed set;
+  // holding a baby adds load, so each baby set counts as one impact level higher
   let coins=0;
-  s.items.forEach(it=>{ const dn=it.done.filter(Boolean).length; coins += dn*(it.ex.impact||1)*2; });
+  s.items.forEach(it=>{ const dn=it.done.filter(Boolean).length; coins += dn*((it.ex.impact||1)+(baby?1:0))*2; });
   coins += perfect?15:5;
   // per-exercise best result (for progression next time)
   const exResults=s.items.filter(it=>it.role==="main").map(it=>{
     const doneReps=it.reps.filter((r,idx)=>it.done[idx]);
     return {id:it.ex.id, name:it.ex.name, unit:it.unit, best:doneReps.length?Math.max(...doneReps):0};
   }).filter(r=>r.best>0);
-  const details={early, perfect, parts:[...new Set(s.items.map(i=>i.ex.part))], ex:exResults, coins};
+  const details={early, perfect, baby, parts:[...new Set(s.items.map(i=>i.ex.part))], ex:exResults, coins};
   // streak
   let streak=ME.streak||0, best=ME.best_streak||0;
   if(ME.last_workout!==todayStr()){
@@ -1419,7 +1479,7 @@ async function finishWorkout(){
   ME=PROFILES.find(p=>p.id===ME.id)||ME;
   await loadPRs();           // refresh progression for next time
   SESSION=null; FINISHING=false;
-  renderSummary({xp,mins,done,tot,perfect,streak,coins});
+  renderSummary({xp,mins,done,tot,perfect,streak,coins,baby});
 }
 
 function renderSummary(r){
@@ -1439,6 +1499,7 @@ function renderSummary(r){
         <div><div class="v" style="color:var(--coral)">🔥${r.streak}</div><div class="l muted">Streak</div></div>
       </div>
       <div class="muted" style="margin-top:12px;font-size:13px">${r.done}/${r.tot} sets · ${r.mins} min · Level ${lvl} · 🪙 ${getCoins(ME)} total</div>
+      ${r.baby?'<div class="pill" style="margin-top:12px;color:var(--coral)">👶 Baby mode — bonus XP &amp; coins for the added challenge!</div>':''}
     </div>
     <button class="btn" id="sm_shop">🛍️ Spend coins in the Avatar Studio</button>
     <button class="btn alt" id="sm_home" style="margin-top:10px">Back to home</button>
