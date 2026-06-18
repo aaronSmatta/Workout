@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>运动 Challenge — Move together, stay accountable</title>
+<!-- Install to the iPhone Home Screen as a full-screen app -->
+<meta name="theme-color" content="#0f1320" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="运动 Challenge" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" type="image/png" href="icon-192.png" />
+<link rel="manifest" href="manifest.webmanifest" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
@@ -21,9 +30,12 @@
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     background:radial-gradient(1200px 600px at 70% -10%,#23305a 0%,var(--bg) 55%) fixed;
-    color:var(--text); min-height:100vh; padding-bottom:84px;
+    color:var(--text); min-height:100vh;
+    /* respect the iPhone home indicator when launched from the Home Screen */
+    padding-bottom:calc(84px + env(safe-area-inset-bottom));
   }
-  .wrap{max-width:560px;margin:0 auto;padding:16px}
+  /* clear the notch / status bar in standalone (Home Screen) mode */
+  .wrap{max-width:560px;margin:0 auto;padding:16px;padding-top:calc(16px + env(safe-area-inset-top))}
   h1,h2,h3{margin:0}
   button{font-family:inherit;cursor:pointer;border:none;color:inherit}
   .btn{background:var(--grad);color:#fff;border-radius:14px;padding:14px 18px;font-size:16px;font-weight:700;width:100%;box-shadow:0 6px 18px rgba(255,77,109,.35);transition:transform .08s}
@@ -49,7 +61,7 @@
   .logo .dot{width:14px;height:14px;border-radius:50%;background:var(--grad)}
   .avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;border:2px solid var(--line)}
   /* nav */
-  .nav{position:fixed;bottom:0;left:0;right:0;background:rgba(16,19,32,.92);backdrop-filter:blur(12px);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 4px 14px;z-index:50}
+  .nav{position:fixed;bottom:0;left:0;right:0;background:rgba(16,19,32,.92);backdrop-filter:blur(12px);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 4px 14px;padding-bottom:calc(14px + env(safe-area-inset-bottom));z-index:50}
   .nav button{background:none;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:600;flex:1;padding:4px}
   .nav button .ic{font-size:21px}
   .nav button.active{color:var(--orange)}
@@ -73,7 +85,7 @@
   .setrow.done .check{background:var(--green);border-color:var(--green);color:#06281c}
   .repedit{width:54px;text-align:center;padding:8px;font-weight:800;font-size:16px}
   /* rest overlay */
-  .rest{position:fixed;inset:0;background:rgba(8,10,20,.96);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+  .rest{position:fixed;inset:0;background:rgba(8,10,20,.96);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom))}
   .ring{font-size:72px;font-weight:900;font-variant-numeric:tabular-nums}
   .badge{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px;border-radius:16px;background:var(--card);border:1px solid var(--line);text-align:center}
   .badge.locked{opacity:.38;filter:grayscale(.6)}
@@ -1302,11 +1314,28 @@ function renderAvatarStudio(){
 /* ============================================================
    WORKOUT RUNNER  (sets, check-off, edit reps, rest timers)
    ============================================================ */
+/* ---------- KEEP THE SCREEN AWAKE DURING A WORKOUT ---------- */
+let _wakeLock=null;
+async function requestWake(){
+  try{
+    if("wakeLock" in navigator){
+      _wakeLock=await navigator.wakeLock.request("screen");
+      if(_wakeLock && _wakeLock.addEventListener) _wakeLock.addEventListener("release",()=>{ _wakeLock=null; });
+    }
+  }catch(e){ /* unsupported / denied (e.g. Low Power Mode) — fail quietly */ }
+}
+async function releaseWake(){ try{ if(_wakeLock) await _wakeLock.release(); }catch(e){} _wakeLock=null; }
+// iOS/Android drop the lock when the app is backgrounded — re-acquire on return
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible" && SESSION && !_wakeLock) requestWake();
+});
+
 function startWorkout(w){
   const items=[...w.warm,...w.main,...w.cool].map(it=>({...it,
     done:Array(it.sets).fill(false), reps:it.targets.slice()}));
   SESSION={w, items, idx:0, startTs:Date.now()};
   FINISHING=false;
+  requestWake();          // keep the display on for the whole session
   renderRunner();
 }
 function totalSets(){ return SESSION.items.reduce((a,it)=>a+it.sets,0); }
@@ -1334,7 +1363,7 @@ function renderRunner(){
       <span class="pill" id="rn_clock">⏱️ ${fmtClock(Date.now()-s.startTs)}</span>
       <span class="pill">${s.idx+1} / ${s.items.length}</span>
     </div>
-    <div class="muted center" style="font-size:11px;margin:-6px 0 10px">${s.w.tpl.name} · total time</div>
+    <div class="muted center" style="font-size:11px;margin:-6px 0 10px">${s.w.tpl.name} · total time${("wakeLock" in navigator)?" · 🔆 screen stays on":""}</div>
     <div class="bar" style="margin-bottom:16px"><i style="width:${pct}%"></i></div>
 
     <div class="card" style="text-align:center;margin-bottom:14px">
@@ -1382,7 +1411,7 @@ function renderRunner(){
     sw.appendChild(row);
   }
   startClock();
-  $("#rn_quit").onclick=()=>{ if(confirm("Quit this workout? Progress won't be saved.")){ stopClock(); SESSION=null; showApp(); } };
+  $("#rn_quit").onclick=()=>{ if(confirm("Quit this workout? Progress won't be saved.")){ stopClock(); releaseWake(); SESSION=null; showApp(); } };
   $("#rn_next").onclick=()=>{
     if(s.idx<s.items.length-1){
       s.idx++; const restMsg="Up next: "+s.items[s.idx].ex.name;
@@ -1479,6 +1508,7 @@ async function finishWorkout(){
   ME=PROFILES.find(p=>p.id===ME.id)||ME;
   await loadPRs();           // refresh progression for next time
   SESSION=null; FINISHING=false;
+  releaseWake();             // workout done — let the screen sleep normally again
   renderSummary({xp,mins,done,tot,perfect,streak,coins,baby});
 }
 

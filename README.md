@@ -14,6 +14,12 @@ A friendly, mobile-first workout app for the whole family to stay accountable to
 
 Just open `index.html` in any modern browser (or host it on GitHub Pages, Netlify, etc. and share the link). It automatically connects to the shared Supabase cloud project that's already built in — every profile created and every workout logged syncs across devices with no setup for users. Everyone who opens the app shares the same squad and leaderboard.
 
+## Install on your iPhone (Home Screen app)
+
+Open the hosted link in Safari, tap **Share → Add to Home Screen**, then launch it from the icon. It runs full-screen with no browser chrome (a real app feel), uses the app icon and dark theme, and respects the notch / home-indicator safe areas. Files `manifest.webmanifest` and `icon-180/192/512.png` power this — keep them next to `index.html` when hosting. (On Android/Chrome you'll get an "Install app" prompt from the same manifest.)
+
+**Screen stays awake during workouts.** When a workout is running, the app holds a screen Wake Lock so the display won't dim or sleep between sets; it's released automatically when you finish or quit, and re-acquired if you switch away and come back. Uses the standard Wake Lock API (iOS Safari 16.4+, Chrome, Edge); on browsers without it, the app just behaves normally.
+
 ## One-time owner setup
 
 The app's Supabase URL and key are already embedded. The only thing the project owner must do once is create the database tables:
