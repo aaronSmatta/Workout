@@ -950,7 +950,8 @@ async function renderHome(){
     <div class="row between" style="margin:4px 2px 10px"><h3>Today's workout</h3>
       <button class="btn sm alt" id="editHome" style="padding:6px 12px">✏️ Edit</button></div>
     <div class="grid" id="tpls"></div>
-    <button class="btn alt" style="margin-top:14px" id="customBtn">🛠️ Build a custom workout</button>
+    <button class="btn alt" style="margin-top:14px" id="logBtn">✍️ Log a gym / manual workout</button>
+    <button class="btn alt" style="margin-top:10px" id="customBtn">🛠️ Build a custom workout</button>
     <button class="btn alt" style="margin-top:10px" id="communityBtn">🌐 Browse squad workouts</button>
 
     ${mine.length?`<h3 style="margin:22px 2px 10px">Recent activity</h3><div class="grid" id="recent"></div>`:''}
@@ -971,6 +972,7 @@ async function renderHome(){
     b.onclick=()=>startWorkout(w);
     tpls.appendChild(b);
   });
+  $("#logBtn").onclick=renderQuickLog;
   $("#customBtn").onclick=()=>renderCustomBuilder();
   $("#communityBtn").onclick=renderCommunity;
   $("#editHome").onclick=renderOrganize;
@@ -982,11 +984,11 @@ async function renderHome(){
     mine.slice(0,5).forEach(l=>{
       const d=document.createElement("div"); d.className="card"; d.style.padding="12px";
       d.innerHTML=`<div class="row between">
-          <div style="font-weight:700">${esc(l.workout_name)}</div>
+          <div style="font-weight:700">${esc(l.workout_name)}${(l.details&&l.details.source==="manual")?' <span class="tag">✍️ logged</span>':''}</div>
           <div class="row" style="gap:8px"><span class="chip">+${l.xp_earned} XP</span>
             <button class="del-log" title="Delete this workout" style="background:none;font-size:16px;line-height:1;padding:4px;color:var(--muted)">🗑️</button></div>
         </div>
-        <div class="muted" style="font-size:12px;margin-top:4px">${l.date} · ${l.done_sets}/${l.total_sets} sets · ${l.duration_min} min</div>`;
+        <div class="muted" style="font-size:12px;margin-top:4px">${l.date} · ${(l.details&&l.details.source==="manual")?(l.total_sets?(l.total_sets+" sets · "):"")+l.duration_min+" min":l.done_sets+"/"+l.total_sets+" sets · "+l.duration_min+" min"}</div>`;
       d.querySelector(".del-log").onclick=async(ev)=>{
         ev.stopPropagation();
         if(!confirm("Delete this “"+l.workout_name+"” workout? Its XP and streak will be rolled back.")) return;
@@ -1081,6 +1083,140 @@ async function renderCustomBuilder(preselect){
   }
   $("#cb_save").onclick=async()=>{ const tpl=buildTpl(); if(!tpl) return; await persist(tpl); toast("Saved to home 🎉"); go("home"); };
   $("#cb_start").onclick=async()=>{ const tpl=buildTpl(); if(!tpl) return; await persist(tpl); startWorkout(buildWorkout(tpl,ME.age_group)); };
+}
+
+/* ============================================================
+   MANUAL / GYM LOG — add your own activities and earn points.
+   Cardio by the minute (treadmill, elliptical, stair master) OR strength
+   moves with your own reps & sets (e.g. back extensions). Nothing is preset:
+   you type in every activity yourself. XP + coins count toward the squad.
+   ============================================================ */
+const INTENSITY=[{id:1,label:"Light"},{id:2,label:"Moderate"},{id:3,label:"Intense"}];
+function manualEntryReward(a){
+  if(a.type==="time") return {xp:a.minutes*5, coins:Math.round(a.minutes*a.impact*0.8), mins:a.minutes, sets:0};
+  const mins=Math.max(1, Math.round(a.sets*(a.reps*3+45)/60));   // rough time estimate
+  return {xp:a.sets*10, coins:a.sets*a.impact*2, mins, sets:a.sets};
+}
+function renderQuickLog(){
+  const entries=[];
+  let formType="time", formImpact=2;
+  app().innerHTML=`
+   <div class="fade">
+    <div class="topbar"><div class="logo"><span class="dot"></span>Log a workout</div>
+      <button class="btn sm alt" id="ql_back">Back</button></div>
+    <p class="muted" style="margin:0 0 12px">Add what you did yourself — cardio by the minute, or a strength move with your own reps &amp; sets. You earn XP &amp; coins toward the squad. 🏆</p>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="field" style="margin-bottom:10px"><label>Exercise name</label>
+        <input id="ql_name" placeholder="e.g. Treadmill, Elliptical, Back Extensions" maxlength="36"/></div>
+      <label>How do you want to track it?</label>
+      <div class="seg" id="ql_type" style="margin-bottom:12px">
+        <button data-t="time" class="on">⏱️ Time (minutes)</button>
+        <button data-t="reps">🔢 Reps &amp; sets</button>
+      </div>
+      <div id="ql_time">
+        <div class="field"><label>Minutes</label><input id="ql_min" type="number" min="1" max="600" value="30"/></div>
+      </div>
+      <div id="ql_reps" class="hidden">
+        <div class="row" style="gap:10px">
+          <div class="field" style="flex:1"><label>Reps (per set)</label><input id="ql_reps_v" type="number" min="1" max="999" value="12"/></div>
+          <div class="field" style="flex:1"><label>Sets</label><input id="ql_sets_v" type="number" min="1" max="50" value="3"/></div>
+        </div>
+      </div>
+      <label>Intensity (affects coins earned)</label>
+      <div class="seg" id="ql_int">
+        <button data-i="1">Light</button><button data-i="2" class="on">Moderate</button><button data-i="3">Intense</button>
+      </div>
+      <button class="btn teal sm" id="ql_add" style="width:100%;margin-top:14px">➕ Add to session</button>
+    </div>
+
+    <div class="exhead" style="margin:0 2px 8px">This session</div>
+    <div id="ql_list"></div>
+    <div style="height:128px"></div>
+   </div>
+   <div style="position:fixed;bottom:84px;left:0;right:0;padding:12px;background:linear-gradient(transparent,var(--bg) 30%)">
+     <div class="wrap" style="padding:0 16px">
+       <button class="btn" id="ql_save">💾 Save workout (<span id="ql_n">0</span>)</button>
+     </div>
+   </div>`;
+  const typeSeg=$("#ql_type");
+  typeSeg.querySelectorAll("button").forEach(b=>b.onclick=()=>{ formType=b.dataset.t;
+    typeSeg.querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+    $("#ql_time").classList.toggle("hidden",formType!=="time");
+    $("#ql_reps").classList.toggle("hidden",formType!=="reps"); });
+  const intSeg=$("#ql_int");
+  intSeg.querySelectorAll("button").forEach(b=>b.onclick=()=>{ formImpact=+b.dataset.i;
+    intSeg.querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on"); });
+
+  function readForm(){
+    const name=$("#ql_name").value.trim();
+    if(!name){ toast("Add an exercise name"); return null; }
+    if(formType==="time"){
+      const m=parseInt($("#ql_min").value)||0; if(m<1){ toast("Enter the minutes you did"); return null; }
+      return {name, type:"time", minutes:m, impact:formImpact};
+    }
+    const r=parseInt($("#ql_reps_v").value)||0, s=parseInt($("#ql_sets_v").value)||0;
+    if(r<1||s<1){ toast("Enter reps and sets"); return null; }
+    return {name, type:"reps", reps:r, sets:s, impact:formImpact};
+  }
+  function drawList(){
+    const list=$("#ql_list"); list.innerHTML="";
+    if(!entries.length){ list.innerHTML=`<div class="card center muted" style="font-size:13px">No activities yet — add your treadmill minutes, or a strength move with reps &amp; sets.</div>`; }
+    entries.forEach((a,idx)=>{
+      const rc=manualEntryReward(a);
+      const detail = a.type==="time" ? `${a.minutes} min` : `${a.sets} × ${a.reps} reps`;
+      const d=document.createElement("div"); d.className="card"; d.style.cssText="padding:12px;margin-bottom:8px";
+      d.innerHTML=`<div class="row between">
+          <div style="flex:1"><div style="font-weight:700">${esc(a.name)}</div>
+            <div class="muted" style="font-size:12px;margin-top:2px">${detail} · ${INTENSITY[a.impact-1].label} · +${rc.xp} XP · +${rc.coins} 🪙</div></div>
+          <button class="ql_del" data-i="${idx}" title="Remove" style="background:none;font-size:16px;color:var(--muted);padding:4px">🗑️</button>
+        </div>`;
+      list.appendChild(d);
+    });
+    list.querySelectorAll(".ql_del").forEach(b=>b.onclick=()=>{ entries.splice(+b.dataset.i,1); drawList(); });
+    $("#ql_n").textContent=entries.length;
+  }
+  drawList();
+  $("#ql_add").onclick=()=>{ const a=readForm(); if(!a) return; entries.push(a); $("#ql_name").value=""; $("#ql_name").focus(); drawList(); toast("Added "+a.name); };
+  $("#ql_back").onclick=()=>go("home");
+  $("#ql_save").onclick=async()=>{
+    let list=entries.slice();
+    if(!list.length){ const a=readForm(); if(a) list=[a]; }   // allow saving a single un-added entry
+    if(!list.length){ toast("Add at least one activity"); return; }
+    const btn=$("#ql_save"); btn.disabled=true; btn.textContent="Saving…";
+    try{ await saveManualLog(list); }
+    catch(e){ alert("Could not save: "+e.message); btn.disabled=false; btn.textContent="💾 Save workout"; }
+  };
+}
+
+/* build the session log, award XP + coins, update streak — same economy as a
+   normal workout, so it shows on the squad leaderboard & weekly challenge */
+async function saveManualLog(list){
+  let xp=0, coins=0, sets=0, mins=0;
+  list.forEach(a=>{ const r=manualEntryReward(a); xp+=r.xp; coins+=r.coins; sets+=r.sets; mins+=r.mins; });
+  xp+=20;                                  // session completion bonus
+  mins=Math.max(1,mins);
+  const name = list.length===1 ? list[0].name : "Gym session";
+  // streak — identical rules to finishWorkout()
+  let streak=ME.streak||0, best=ME.best_streak||0;
+  if(ME.last_workout!==todayStr()){
+    const gap=ME.last_workout?daysBetween(ME.last_workout,todayStr()):999;
+    streak = gap===1 ? streak+1 : 1;
+  } else { streak=Math.max(1,streak); }
+  best=Math.max(best,streak);
+  const newXP=(ME.xp||0)+xp;
+  const log={profile_id:ME.id, workout_name:name, date:todayStr(), duration_min:mins,
+    xp_earned:xp, total_sets:sets, done_sets:sets, details:{manual:list, coins, source:"manual"}};
+  await DB.addLog(log);
+  await DB.updateProfile(ME.id,{xp:newXP,streak,best_streak:best,last_workout:todayStr()});
+  ME.xp=newXP; ME.streak=streak; ME.best_streak=best; ME.last_workout=todayStr();
+  await addCoins(ME, coins);               // bank coins toward the avatar shop
+  PROFILES=await DB.getProfiles().catch(()=>PROFILES);
+  ME=PROFILES.find(p=>p.id===ME.id)||ME;
+  await loadPRs();
+  toast(`Logged! +${xp} XP · +${coins} 🪙`);
+  await checkNewBadges();                   // may unlock achievements + their coin bonus
+  go("home");
 }
 
 /* ---------- CREATE OR EDIT A (SHARED) EXERCISE ---------- */
